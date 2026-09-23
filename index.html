@@ -1,8 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Multi-Model AI</title>
 <style>
 *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui;background:#070b14;color:#eef4ff}
@@ -12,121 +11,125 @@ button,input,textarea{font:inherit}.wrap{max-width:1100px;margin:auto;padding:28
 .toggle{display:flex;justify-content:space-between;align-items:center}.switch{width:48px;height:26px;border-radius:20px;border:0;background:#334155;cursor:pointer;position:relative}
 .switch.on{background:#2563eb}.switch:after{content:"";position:absolute;width:20px;height:20px;top:3px;left:4px;border-radius:50%;background:white;transition:.2s}.switch.on:after{left:24px}
 .panel{margin-top:18px}.drop{border:1px dashed #3a4b68;border-radius:16px;padding:28px;text-align:center}
-.btn{margin-top:14px;background:#2563eb;color:white;border:0;border-radius:12px;padding:12px 18px;cursor:pointer}
-.btn:disabled{opacity:.55;cursor:wait}.output{white-space:pre-wrap;background:#080d17;border-radius:14px;padding:16px;min-height:160px;line-height:1.5}
+.btn{margin:8px 6px 0 0;background:#2563eb;color:white;border:0;border-radius:12px;padding:12px 18px;cursor:pointer}
+.btn.secondary{background:#17243a}.btn:disabled{opacity:.55;cursor:wait}
+.output{white-space:pre-wrap;background:#080d17;border-radius:14px;padding:16px;min-height:160px;line-height:1.5}
 .status{margin-top:10px;font-size:13px;color:#93a4bf}.preview{max-width:100%;max-height:280px;margin-top:14px;border-radius:12px;display:none}
 </style>
 </head>
 <body>
 <div class="wrap">
 <section class="hero"><div class="muted">MULTIMODAL WORKSPACE</div><h1>Multi-Model AI</h1>
-<p class="muted">One workspace for multimodal analysis, SEO and AI-assisted video editing plans.</p></section>
-
+<p class="muted">Professional multimodal analysis, AI editing plans, SEO intelligence and media workflows.</p></section>
 <section class="grid" id="modules"></section>
 
-<section class="card panel">
-<h3>Workspace</h3><p class="muted">Upload content and describe the task. The API key remains server-side.</p>
+<section class="card panel"><h3>Workspace</h3>
+<p class="muted">Upload a source file and choose exactly what the AI should do.</p>
 <div class="drop">
 <input id="file" type="file" accept="image/*,audio/*,video/*,.txt,.pdf">
 <img id="preview" class="preview" alt="Preview">
-<textarea id="prompt" rows="5" style="width:100%;margin-top:14px;background:#0b1220;color:white;border:1px solid #263751;border-radius:10px;padding:12px" placeholder="Example: Analyze this raw video, find the strongest hook, create an editing plan and generate SEO for all platforms."></textarea>
-<br><button id="runBtn" class="btn" onclick="run()">Run enabled modules</button>
+<textarea id="prompt" rows="5" style="width:100%;margin-top:14px;background:#0b1220;color:white;border:1px solid #263751;border-radius:10px;padding:12px" placeholder="Example: Turn this raw video into a high-retention 9:16 short. Find the strongest hook, remove weak parts, create captions and generate platform SEO."></textarea>
+<br>
+<button id="runBtn" class="btn" onclick="run()">Run AI Pipeline</button>
+<button id="planBtn" class="btn secondary" onclick="createEditPlan()">Build Edit Plan</button>
+<button id="renderBtn" class="btn secondary" onclick="renderVideo()" disabled>Render Edited Video</button>
 <div id="status" class="status">Ready.</div>
-</div>
-</section>
+</div></section>
 
-<section class="card panel"><h3>Result</h3><div id="out" class="output">Ready.</div></section>
+<section class="card panel"><h3>AI Result</h3><div id="out" class="output">Ready.</div></section>
 </div>
 
 <script>
 const state={text:true,image:true,audio:true,video:true,editing:false,seo:true,analysis:true};
+let latestPlan=null;
+
 const labels={
 text:["Text AI","Generate, rewrite and reason over text."],
 image:["Image AI","Analyze images and visual context."],
 audio:["Audio AI","Transcribe and analyze audio."],
 video:["Video AI","Analyze video content and scenes."],
-editing:["AI Video Editing","Create an automated edit plan."],
-seo:["SEO Generator","Generate platform-specific metadata."],
-analysis:["Content Analysis","Return structured content insights."]
+editing:["AI Video Editing","Build a professional edit decision plan."],
+seo:["SEO Intelligence","Generate platform-specific SEO."],
+analysis:["Media Analysis","Analyze content and performance signals."]
 };
 
 function render(){
-  document.querySelector("#modules").innerHTML=Object.entries(labels).map(([k,v]) =>
-    '<div class="card"><div class="toggle"><div><h3>'+v[0]+'</h3><div class="muted">'+v[1]+
-    '</div></div><button class="switch '+(state[k]?"on":"")+
-    '" onclick="toggleModule(\''+k+'\')" aria-label="Toggle '+v[0]+'"></button></div></div>'
-  ).join("");
+ document.querySelector("#modules").innerHTML=Object.entries(labels).map(([k,v]) =>
+ '<div class="card"><div class="toggle"><div><h3>'+v[0]+'</h3><div class="muted">'+v[1]+
+ '</div></div><button class="switch '+(state[k]?"on":"")+'" onclick="toggleModule(\''+k+'\')" aria-label="Toggle '+v[0]+'"></button></div></div>'
+ ).join("");
 }
 function toggleModule(k){state[k]=!state[k];render();}
 
 document.querySelector("#file").addEventListener("change",e=>{
-  const f=e.target.files[0], p=document.querySelector("#preview");
-  if(f && f.type.startsWith("image/")){p.src=URL.createObjectURL(f);p.style.display="block";}
-  else{p.style.display="none";p.removeAttribute("src");}
+ const f=e.target.files[0],p=document.querySelector("#preview");
+ if(f&&f.type.startsWith("image/")){p.src=URL.createObjectURL(f);p.style.display="block";}
+ else{p.style.display="none";p.removeAttribute("src");}
+ latestPlan=null;document.querySelector("#renderBtn").disabled=true;
 });
 
-function moduleInstructions(enabled){
-  const tasks=[];
-  if(enabled.includes("text")) tasks.push("Handle the user's text request intelligently.");
-  if(enabled.includes("image")) tasks.push("Analyze important visual content, objects, visible text and context.");
-  if(enabled.includes("audio")) tasks.push("Transcribe and summarize audio when possible.");
-  if(enabled.includes("video")) tasks.push("Analyze the uploaded video for topic, hook, scenes, pacing, audience and notable moments.");
-  if(enabled.includes("analysis")) tasks.push("Return topic, target audience, hook, strengths, weaknesses and concrete improvement ideas.");
-  if(enabled.includes("seo")) tasks.push("Create separate SEO packages for YouTube, Instagram Reels, TikTok and Facebook Reels: title/caption, description, keywords and hashtags.");
-  if(enabled.includes("editing")) tasks.push("Create a concrete edit plan for a later rendering worker: strongest moments, cuts, pacing, captions, B-roll, transitions, sound cues, opening hook, CTA and 9:16 guidance. Do not claim the video has already been physically edited.");
-  return tasks.join("\n");
+function fileToBase64(file){
+ return new Promise((resolve,reject)=>{
+  const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");
+  reader.onerror=reject;reader.readAsDataURL(file);
+ });
 }
 
-function fileToBase64(file){
-  return new Promise((resolve,reject)=>{
-    const reader=new FileReader();
-    reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");
-    reader.onerror=reject;
-    reader.readAsDataURL(file);
-  });
+function moduleInstructions(enabled){
+ const tasks=[];
+ if(enabled.includes("text"))tasks.push("Handle the text request intelligently.");
+ if(enabled.includes("image"))tasks.push("Analyze visual content, objects, visible text and context.");
+ if(enabled.includes("audio"))tasks.push("Transcribe and summarize audio when possible.");
+ if(enabled.includes("video"))tasks.push("Analyze topic, hook, scenes, pacing, audience and notable moments.");
+ if(enabled.includes("analysis"))tasks.push("Return topic, audience, hook, strengths, weaknesses and improvement ideas.");
+ if(enabled.includes("seo"))tasks.push("Create separate YouTube, Instagram Reels, TikTok and Facebook Reels SEO packages.");
+ if(enabled.includes("editing"))tasks.push("Create a concrete professional edit plan with cuts, captions, B-roll, pacing, transitions, audio cues, CTA and 9:16 guidance.");
+ return tasks.join("\n");
 }
 
 async function run(){
-  const enabled=Object.keys(state).filter(k=>state[k]);
-  const file=document.querySelector("#file").files[0];
-  const prompt=document.querySelector("#prompt").value.trim();
-  const out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#runBtn");
+ const enabled=Object.keys(state).filter(k=>state[k]),file=document.querySelector("#file").files[0];
+ const prompt=document.querySelector("#prompt").value.trim(),out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#runBtn");
+ if(!prompt&&!file){out.textContent="Please enter a prompt or upload a file.";return;}
+ btn.disabled=true;status.textContent="AI pipeline running...";out.textContent="Analyzing...";
+ try{
+  let data="";if(file){if(file.size>15*1024*1024)throw new Error("Keep files under 15 MB in this version.");data=await fileToBase64(file);}
+  const fullPrompt="You are a professional multimodal media intelligence engine.\nEnabled: "+enabled.join(", ")+"\n\nTasks:\n"+moduleInstructions(enabled)+"\n\nUser request:\n"+(prompt||"Analyze uploaded content.")+"\n\nBe factual. Never invent analytics, trends, timestamps or metrics.";
+  const response=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:fullPrompt,mimeType:file?.type||"",data,editing:state.editing,seo:state.seo,analysis:state.analysis})});
+  const json=await response.json();if(!response.ok)throw new Error(json.error||"API request failed.");
+  out.textContent=json.text||"No result returned.";status.textContent="Analysis completed.";
+ }catch(e){out.textContent="Error: "+e.message;status.textContent="Pipeline failed."}
+ finally{btn.disabled=false;}
+}
 
-  if(!prompt && !file){out.textContent="Please enter a prompt or upload a file.";return;}
+async function createEditPlan(){
+ const file=document.querySelector("#file").files[0],out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#planBtn");
+ if(!file||!file.type.startsWith("video/")){out.textContent="Upload a video first.";return;}
+ if(file.size>15*1024*1024){out.textContent="Keep the video under 15 MB in this version.";return;}
+ btn.disabled=true;status.textContent="Building professional edit decision list...";out.textContent="Analyzing video for hook, cuts, captions and pacing...";
+ try{
+  const data=await fileToBase64(file);
+  const r=await fetch("/api/edit-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mimeType:file.type,data,instruction:document.querySelector("#prompt").value.trim()})});
+  const j=await r.json();if(!r.ok)throw new Error(j.error||"Edit-plan request failed.");
+  latestPlan=j.plan;document.querySelector("#renderBtn").disabled=false;
+  out.textContent=JSON.stringify(j.plan,null,2);status.textContent="Edit plan ready. Review it before rendering.";
+ }catch(e){out.textContent="Error: "+e.message;status.textContent="Edit planning failed."}
+ finally{btn.disabled=false;}
+}
 
-  btn.disabled=true;status.textContent="AI is processing...";out.textContent="Sending request to the multimodal model...";
-
-  try{
-    let data="";
-    if(file){
-      if(file.size>15*1024*1024) throw new Error("For this first version, keep files under 15 MB.");
-      data=await fileToBase64(file);
-    }
-
-    const fullPrompt =
-      "You are the analysis engine of a multimodal AI workspace.\n"+
-      "Enabled modules: "+enabled.join(", ")+"\n\n"+
-      "Required tasks:\n"+moduleInstructions(enabled)+"\n\n"+
-      "User request:\n"+(prompt||"Analyze the uploaded content according to the enabled modules.")+
-      "\n\nBe factual. Clearly separate observations from recommendations. Do not invent timestamps or details.";
-
-    const response=await fetch("/api/analyze",{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        prompt:fullPrompt,mimeType:file?.type||"",data,
-        editing:state.editing,seo:state.seo,analysis:state.analysis
-      })
-    });
-
-    const json=await response.json();
-    if(!response.ok) throw new Error(json.error||"API request failed.");
-
-    out.textContent=json.text||"No result returned.";
-    status.textContent="Completed with "+(json.model||"AI model")+".";
-  }catch(err){
-    out.textContent="Error: "+err.message;
-    status.textContent="Check the API setup and try again.";
-  }finally{btn.disabled=false;}
+async function renderVideo(){
+ const file=document.querySelector("#file").files[0],out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#renderBtn");
+ if(!file||!latestPlan)return;
+ btn.disabled=true;status.textContent="Rendering video...";out.textContent="FFmpeg render worker is processing the edit plan...";
+ try{
+  const data=await fileToBase64(file);
+  const r=await fetch("/api/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({videoBase64:data,plan:latestPlan})});
+  if(!r.ok){let j={};try{j=await r.json()}catch{}throw new Error(j.error||j.details||"Render failed.");}
+  const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="multi-model-edited.mp4";a.textContent="Download edited video";
+  a.className="btn";out.innerHTML="Render completed. ";out.appendChild(a);status.textContent="Video render completed.";
+ }catch(e){out.textContent="Render error: "+e.message;status.textContent="Rendering failed."}
+ finally{btn.disabled=false;}
 }
 render();
 </script>
