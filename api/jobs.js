@@ -1,7 +1,8 @@
 import { get, put } from "@vercel/blob";
 import crypto from "node:crypto";
 
-function id() { return crypto.randomUUID(); }
+function id() { return crypto.randomUUID(); }\nasync function listJobs(limit=50){const {list}=await import("@vercel/blob");const out=[];const x=await list({prefix:"jobs/",limit});for(const b of x.blobs||[]){try{const d=await get(b.pathname,{access:"private",useCache:false});if(d&&d.statusCode===200)out.push(await new Response(d.stream).json())}catch{}}return out.sort((a,b)=>new Date(b.updated_at||b.created_at||0)-new Date(a.updated_at||a.created_at||0));}
+
 
 export default async function handler(req, res) {
   try {
