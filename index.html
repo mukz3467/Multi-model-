@@ -22,6 +22,7 @@ textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;mar
 .batchPanel{margin-top:14px;padding:14px;background:#070d18;border:1px solid #1d304d;border-radius:14px}
 .job{display:grid;grid-template-columns:1fr 110px 90px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #18263b}.dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}.stage{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.dot{width:9px;height:9px;border-radius:50%;background:#334155;display:inline-block}.dot.active{background:#38bdf8;box-shadow:0 0 12px #38bdf8}.dot.ok{background:#22c55e;box-shadow:0 0 12px #22c55e}.dot.bad{background:#ef4444}
 .progress{height:7px;background:#162235;border-radius:99px;overflow:hidden}.progress i{display:block;height:100%;background:#2563eb;width:0%;transition:.2s}
+@media(max-width:640px){.wrap{padding:14px}.hero h1{font-size:32px}.card{padding:14px}.job{grid-template-columns:1fr 82px 55px}.btn{width:100%;margin-right:0}.row{grid-template-columns:1fr}.dash{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body><div class="wrap">
@@ -67,7 +68,7 @@ textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;mar
 </div>
 <button class="btn good" onclick="loadAccountAnalytics()">SYNC ACCOUNT ANALYTICS</button><button class="btn good" onclick="runAutopilot()">ANALYZE & CHOOSE SCHEDULE</button><button class="btn" onclick="runAutopilotPipeline()">RUN FULL AUTOPILOT</button>
 <button class="btn secondary" onclick="checkConnectors()">CHECK PLATFORM CONNECTIONS</button>
-<div id="connectionStatus" class="status">Connect your accounts to unlock account-based analytics, scheduling and publishing.</div>
+<div id="connectionStatus" class="status">Connect your accounts to unlock account-based analytics, scheduling and publishing.</div><div class="batchPanel"><b>Connected account control</b><div class="muted">The scheduler uses the selected platform connection when available. OAuth tokens remain server-side.</div><button class="btn secondary" onclick="refreshConnectionCards()">REFRESH ACCOUNT STATUS</button></div>
 </section>
 
 <section class="card panel"><h3>AI Result</h3><div id="out" class="output">Ready.</div></section>
