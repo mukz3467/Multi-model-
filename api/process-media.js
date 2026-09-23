@@ -22,11 +22,13 @@ async function ask(file,prompt,key){
  const j=await r.json();if(!r.ok)throw new Error(j?.error?.message||"Gemini generation failed.");return j?.candidates?.[0]?.content?.parts?.map(x=>x.text||"").join("").trim()||"";
 }
 async function render(sourceUrl,plan,jobId){
- const base=(process.env.RENDER_WORKER_URL||"").replace(/\/$/,"");
- if(!base) throw new Error("RENDER_WORKER_URL is not configured.");
+ const external=(process.env.RENDER_WORKER_URL||"").replace(/\/$/,"");
+ const base=external || ((process.env.APP_BASE_URL||"").replace(/\/$/,"")+"/api/render-worker");
+ if(!base) throw new Error("APP_BASE_URL or RENDER_WORKER_URL is required.");
+ const endpoint=external ? base+"/render" : base;
  const headers={"Content-Type":"application/json"};
  if(process.env.RENDER_WORKER_TOKEN) headers.Authorization="Bearer "+process.env.RENDER_WORKER_TOKEN;
- const r=await fetch(base+"/render",{method:"POST",headers,body:JSON.stringify({
+ const r=await fetch(endpoint,{method:"POST",headers,body:JSON.stringify({
    source_url:sourceUrl,
    plan,
    output:{crf:20},
