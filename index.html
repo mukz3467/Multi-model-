@@ -92,9 +92,6 @@ async function uploadBatch(){
    try{
      badge.textContent="uploading";
      const clientJobId=crypto.randomUUID();
-     const r=await fetch("/api/media-upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"blob.generate-client-token",pathname:"uploads/"+clientJobId+"-"+file.name,clientPayload:JSON.stringify({clientJobId,originalName:file.name})})});
-     const tokenResponse=await r.json(); if(!r.ok)throw Error(tokenResponse.error||"Upload token failed.");
-     const putUrl=tokenResponse.clientToken ? null : null;
      const { upload } = await import("https://esm.sh/@vercel/blob@2.6.1/client");
      const blob=await upload("uploads/"+clientJobId+"-"+file.name,file,{access:"private",handleUploadUrl:"/api/media-upload",multipart:file.size>100*1024*1024,clientPayload:JSON.stringify({clientJobId,originalName:file.name}),onUploadProgress(e){pct.textContent=Math.round(e.percentage)+"%";bar.style.width=e.percentage+"%"}});
      const jr=await fetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({job_id:clientJobId,status:"queued",stage:"uploaded",original_name:file.name,content_type:file.type,size:file.size,source_url:blob.url,source_pathname:blob.pathname,progress:100})});
