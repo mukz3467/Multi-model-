@@ -19,6 +19,9 @@ textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;mar
 .output{white-space:pre-wrap;background:#070d18;border-radius:12px;padding:16px;min-height:170px;line-height:1.5;overflow:auto}
 .status{margin-top:10px;font-size:13px;color:#91a4c2}.pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#13223a;color:#8db8ff;font-size:12px;margin:3px}
 .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;text-align:left}.metric{padding:12px;background:#09111f;border-radius:12px}.metric b{display:block;font-size:20px}
+.batchPanel{margin-top:14px;padding:14px;background:#070d18;border:1px solid #1d304d;border-radius:14px}
+.job{display:grid;grid-template-columns:1fr 110px 90px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #18263b}
+.progress{height:7px;background:#162235;border-radius:99px;overflow:hidden}.progress i{display:block;height:100%;background:#2563eb;width:0%;transition:.2s}
 </style>
 </head>
 <body><div class="wrap">
@@ -29,7 +32,13 @@ textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;mar
 <section class="grid" id="modules"></section>
 
 <section class="card panel"><h3>Content Workspace</h3><p class="muted">Upload raw media and let the model build the intelligence layer.</p>
-<div class="drop"><input id="file" type="file" accept="image/*,audio/*,video/*,.txt,.pdf"><img id="preview" class="preview" alt="Preview">
+<div class="drop"><input id="file" type="file" multiple accept="image/*,audio/*,video/*,.txt,.pdf">
+<div id="batchPanel" class="batchPanel">
+  <div class="row"><div><b>Batch Media Queue</b><div class="muted">Upload 1–50 videos directly to private storage. Uploads continue independently of the page processing the files.</div></div><div style="text-align:right"><span id="batchCount" class="pill">0/50</span></div></div>
+  <div id="batchList"></div>
+  <button id="batchUploadBtn" class="btn good" onclick="uploadBatch()" disabled>UPLOAD BATCH</button>
+  <button class="btn secondary" onclick="refreshBatch()">REFRESH QUEUE</button>
+</div><img id="preview" class="preview" alt="Preview">
 <textarea id="prompt" rows="4" placeholder="Example: Turn this raw video into a high-retention 9:16 short, then prepare platform-specific SEO and a publishing recommendation."></textarea>
 <button id="runBtn" class="btn" onclick="run()">Run AI Pipeline</button><button id="planBtn" class="btn secondary" onclick="createEditPlan()">Build Edit Plan</button><button id="renderBtn" class="btn secondary" onclick="renderVideo()" disabled>Render Edited Video</button>
 <div id="status" class="status">Ready.</div></div></section>
@@ -51,12 +60,57 @@ textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;mar
 </div>
 
 <script>
-const state={text:true,image:true,audio:true,video:true,editing:false,seo:true,analysis:true};
+const batchJobs=[];\nconst state={text:true,image:true,audio:true,video:true,editing:false,seo:true,analysis:true};
 let latestPlan=null;
 const labels={text:["Text AI","Generate and reason over text."],image:["Image AI","Analyze visual content."],audio:["Audio AI","Transcribe and analyze audio."],video:["Video AI","Analyze scenes and content."],editing:["AI Video Editing","Build an edit decision list."],seo:["SEO Intelligence","Create platform-specific SEO."],analysis:["Media Analysis","Analyze performance signals."]};
 function render(){document.querySelector("#modules").innerHTML=Object.entries(labels).map(([k,v])=>'<div class="card"><div class="toggle"><div><h3>'+v[0]+'</h3><div class="muted">'+v[1]+'</div></div><button class="switch '+(state[k]?"on":"")+'" onclick="toggleModule(\''+k+'\')"></button></div></div>').join("")}
 function toggleModule(k){state[k]=!state[k];render()}
-document.querySelector("#file").addEventListener("change",e=>{const f=e.target.files[0],p=document.querySelector("#preview");if(f?.type.startsWith("image/")){p.src=URL.createObjectURL(f);p.style.display="block"}else{p.style.display="none";p.removeAttribute("src")}latestPlan=null;document.querySelector("#renderBtn").disabled=true});
+document.querySelector("#file").addEventListener("change",e=>{
+ const files=[...e.target.files];
+ const p=document.querySelector("#preview");
+ if(files.length>50){alert("Maximum 50 files per batch.");e.target.value="";return}
+ const f=files[0];
+ if(f?.type.startsWith("image/")){p.src=URL.createObjectURL(f);p.style.display="block"}else{p.style.display="none";p.removeAttribute("src")}
+ latestPlan=null;document.querySelector("#renderBtn").disabled=true;
+ renderBatchFiles(files);
+});
+function renderBatchFiles(files){
+ const list=document.querySelector("#batchList"),btn=document.querySelector("#batchUploadBtn");
+ document.querySelector("#batchCount").textContent=files.length+"/50";
+ list.innerHTML=files.map((f,i)=>'<div class="job" id="batch-'+i+'"><div><b>'+escapeHtml(f.name)+'</b><div class="muted">'+formatBytes(f.size)+'</div><div class="progress"><i></i></div></div><span class="pill">waiting</span><span class="muted" id="pct-'+i+'">0%</span></div>').join("");
+ btn.disabled=!files.length;
+}
+function escapeHtml(x){return String(x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+function formatBytes(n){if(!n)return "0 B";const u=["B","KB","MB","GB"];let i=0;while(n>=1024&&i<3){n/=1024;i++}return n.toFixed(i?1:0)+" "+u[i]}
+async function uploadBatch(){
+ const files=[...document.querySelector("#file").files];
+ if(!files.length||files.length>50)return;
+ const btn=document.querySelector("#batchUploadBtn");btn.disabled=true;
+ const results=[];
+ for(let i=0;i<files.length;i++){
+   const file=files[i], row=document.querySelector("#batch-"+i), badge=row.querySelector(".pill"), pct=document.querySelector("#pct-"+i), bar=row.querySelector(".progress i");
+   try{
+     badge.textContent="uploading";
+     const clientJobId=crypto.randomUUID();
+     const r=await fetch("/api/media-upload",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({type:"blob.generate-client-token",pathname:"uploads/"+clientJobId+"-"+file.name,clientPayload:JSON.stringify({clientJobId,originalName:file.name})})});
+     const tokenResponse=await r.json(); if(!r.ok)throw Error(tokenResponse.error||"Upload token failed.");
+     const putUrl=tokenResponse.clientToken ? null : null;
+     const { upload } = await import("https://esm.sh/@vercel/blob@2.6.1/client");
+     const blob=await upload("uploads/"+clientJobId+"-"+file.name,file,{access:"private",handleUploadUrl:"/api/media-upload",multipart:file.size>100*1024*1024,clientPayload:JSON.stringify({clientJobId,originalName:file.name}),onUploadProgress(e){pct.textContent=Math.round(e.percentage)+"%";bar.style.width=e.percentage+"%"}});
+     const jr=await fetch("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({job_id:clientJobId,status:"queued",stage:"uploaded",original_name:file.name,content_type:file.type,size:file.size,source_url:blob.url,source_pathname:blob.pathname,progress:100})});
+     const job=await jr.json();if(!jr.ok)throw Error(job.error||"Job creation failed.");
+     badge.textContent="queued";pct.textContent="100%";bar.style.width="100%";results.push(job);
+   }catch(e){badge.textContent="failed";pct.textContent=e.message}
+ }
+ localStorage.setItem("multiModelJobs",JSON.stringify(results.map(x=>x.job_id)));
+ btn.disabled=false;
+ document.querySelector("#status").textContent=results.length+" video job(s) queued in persistent storage.";
+}
+async function refreshBatch(){
+ const ids=JSON.parse(localStorage.getItem("multiModelJobs")||"[]");if(!ids.length)return;
+ for(const id of ids){try{const r=await fetch("/api/jobs?id="+encodeURIComponent(id));if(r.ok){const j=await r.json();console.log("job",j)}}catch{}}
+ document.querySelector("#status").textContent=ids.length+" persistent job(s) found. Rendering worker orchestration is the next queue stage.";
+}
 function fileToBase64(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(",")[1]||"");r.onerror=reject;r.readAsDataURL(file)})}
 function moduleInstructions(enabled){const t=[];if(enabled.includes("text"))t.push("Handle the text request.");if(enabled.includes("image"))t.push("Analyze objects, visible text and visual context.");if(enabled.includes("audio"))t.push("Transcribe and analyze audio.");if(enabled.includes("video"))t.push("Analyze topic, hook, scenes, pacing and notable moments.");if(enabled.includes("analysis"))t.push("Return audience, strengths, weaknesses and improvements.");if(enabled.includes("seo"))t.push("Create separate YouTube, Instagram, TikTok and Facebook SEO packages.");if(enabled.includes("editing"))t.push("Create a professional edit plan with cuts, captions, B-roll, pacing, transitions, audio cues and 9:16 guidance.");return t.join("\n")}
 async function run(){const enabled=Object.keys(state).filter(k=>state[k]),file=document.querySelector("#file").files[0],prompt=document.querySelector("#prompt").value.trim(),out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#runBtn");if(!prompt&&!file){out.textContent="Enter a prompt or upload a file.";return}btn.disabled=true;status.textContent="AI pipeline running...";out.textContent="Analyzing...";try{let data="";if(file){if(file.size>15*1024*1024)throw Error("Keep files under 15 MB in this version.");data=await fileToBase64(file)}const fullPrompt="You are a professional multimodal media intelligence engine. Enabled: "+enabled.join(", ")+"\nTasks:\n"+moduleInstructions(enabled)+"\nUser request:\n"+(prompt||"Analyze uploaded content.")+"\nNever invent analytics, trends, timestamps or metrics.";const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:fullPrompt,mimeType:file?.type||"",data,editing:state.editing,seo:state.seo,analysis:state.analysis})});const j=await r.json();if(!r.ok)throw Error(j.error||"API request failed.");out.textContent=j.text||"No result.";status.textContent="Analysis completed."}catch(e){out.textContent="Error: "+e.message;status.textContent="Pipeline failed."}finally{btn.disabled=false}}
