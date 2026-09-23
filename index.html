@@ -59,11 +59,15 @@ textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;mar
 <div><label class="muted">Topic</label><input id="topic" placeholder="e.g. business tips"></div>
 <div><label class="muted">Candidate hours</label><input id="hours" value="9,12,15,18,21"></div>
 </div>
-<button class="btn good" onclick="loadAccountAnalytics()">Sync Account Analytics</button><button class="btn good" onclick="runAutopilot()">Analyze & Choose Schedule</button><button class="btn" onclick="runAutopilotPipeline()">RUN FULL AUTOPILOT</button>
-<button class="btn secondary" onclick="connectPlatform('youtube')">Connect YouTube</button>
-<button class="btn secondary" onclick="connectPlatform('tiktok')">Connect TikTok</button>
-<button class="btn secondary" onclick="checkConnectors()">Check Platform Connections</button>
-<div id="connectionStatus" class="status">No platform connected in this browser session.</div>
+<div class="dash" id="accountsGrid">
+<div class="metric"><b>▶ YouTube</b><span id="youtubeState" class="muted">Not connected</span><button class="btn secondary" onclick="connectPlatform('youtube')">CONNECT</button></div>
+<div class="metric"><b>♪ TikTok</b><span id="tiktokState" class="muted">Not connected</span><button class="btn secondary" onclick="connectPlatform('tiktok')">CONNECT</button></div>
+<div class="metric"><b>f Facebook</b><span id="facebookState" class="muted">Not connected</span><button class="btn secondary" onclick="connectPlatform('facebook')">CONNECT</button></div>
+<div class="metric"><b>◎ Instagram</b><span id="instagramState" class="muted">Not connected</span><button class="btn secondary" onclick="connectPlatform('instagram')">CONNECT</button></div>
+</div>
+<button class="btn good" onclick="loadAccountAnalytics()">SYNC ACCOUNT ANALYTICS</button><button class="btn good" onclick="runAutopilot()">ANALYZE & CHOOSE SCHEDULE</button><button class="btn" onclick="runAutopilotPipeline()">RUN FULL AUTOPILOT</button>
+<button class="btn secondary" onclick="checkConnectors()">CHECK PLATFORM CONNECTIONS</button>
+<div id="connectionStatus" class="status">Connect your accounts to unlock account-based analytics, scheduling and publishing.</div>
 </section>
 
 <section class="card panel"><h3>AI Result</h3><div id="out" class="output">Ready.</div></section>
@@ -141,6 +145,20 @@ async function createEditPlan(){const file=document.querySelector("#file").files
 async function renderVideo(){const file=document.querySelector("#file").files[0],out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#renderBtn");if(!file||!latestPlan)return;btn.disabled=true;status.textContent="Rendering...";try{const data=await fileToBase64(file);const r=await fetch("/api/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({videoBase64:data,plan:latestPlan})});if(!r.ok){let j={};try{j=await r.json()}catch{}throw Error(j.error||j.details||"Render failed.")}const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="multi-model-edited.mp4";a.textContent="Download edited video";a.className="btn";out.innerHTML="Render completed. ";out.appendChild(a);status.textContent="Render completed."}catch(e){out.textContent="Render error: "+e.message;status.textContent="Rendering failed."}finally{btn.disabled=false}}
 async function connectPlatform(provider){const out=document.querySelector("#out");out.textContent="Opening "+provider+" authorization...";window.location.href="/api/oauth-start?provider="+encodeURIComponent(provider)}
 async function checkConnectionFromUrl(){const q=new URLSearchParams(location.search);const id=q.get("connection_id"),provider=q.get("provider");if(q.get("oauth")==="connected"&&id&&provider){localStorage.setItem("mmai_connection_"+provider,id);document.querySelector("#connectionStatus").textContent="Connected: "+provider+" • connection "+id;try{const r=await fetch("/api/connection-status?connection_id="+encodeURIComponent(id));const j=await r.json();if(j.connected)document.querySelector("#out").textContent="Platform connected successfully. Account identity is stored server-side; OAuth tokens are never sent to the browser."}catch{}history.replaceState({},document.title,"/")}}
+async function refreshConnectionCards(){
+ const providers=["youtube","tiktok","facebook","instagram"];
+ for(const p of providers){
+  const id=localStorage.getItem("mmai_connection_"+p);
+  const el=document.querySelector("#"+p+"State");
+  if(!el)continue;
+  if(!id){el.textContent="Not connected";continue}
+  try{
+   const r=await fetch("/api/connection-status?connection_id="+encodeURIComponent(id));
+   const j=await r.json();
+   el.textContent=j.connected?(j.account_name||j.channel_name||("Connected • "+id.slice(0,8)+"…")):"Connection unavailable";
+  }catch{el.textContent="Connection check failed"}
+ }
+}
 async function checkConnectors(){const out=document.querySelector("#out");try{const r=await fetch("/api/platform-connectors");const j=await r.json();out.textContent=JSON.stringify(j,null,2)}catch(e){out.textContent="Connection check failed: "+e.message}}
 let syncedAnalytics=null;
 async function loadAccountAnalytics(){const out=document.querySelector("#out"),status=document.querySelector("#status");const q=new URLSearchParams(location.search),id=q.get("connection_id");if(!id){out.textContent="Connect YouTube or TikTok first.";return}status.textContent="Syncing real account analytics...";try{const r=await fetch("/api/account-analytics?connection_id="+encodeURIComponent(id));const j=await r.json();if(!r.ok)throw Error(j.error||"Analytics sync failed.");syncedAnalytics=j;out.textContent=JSON.stringify(j,null,2);status.textContent="Real account analytics synced."}catch(e){out.textContent="Analytics error: "+e.message;status.textContent="Analytics sync failed."}}
@@ -158,5 +176,5 @@ function updateDashboard(jobs){
  state.textContent=jobs.length?("Live queue: "+jobs.length+" job(s) • "+counts.processing+" processing • "+counts.published+" published • "+counts.failed+" failed."):"System ready — waiting for media.";
 }
 render();
-checkConnectionFromUrl();\nloadPublishingSettings();\nsetInterval(()=>{refreshBatch().catch(()=>{})},15000);
+checkConnectionFromUrl();\nrefreshConnectionCards();\nloadPublishingSettings();\nsetInterval(()=>{refreshBatch().catch(()=>{})},15000);
 </script></body></html>
