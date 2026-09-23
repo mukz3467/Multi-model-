@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { getProvider, getRedirectUri } from "./oauth-config.js";
+import { saveTokenBundle } from "./token-vault.js";
 function verifyState(state){
   const secret=process.env.OAUTH_STATE_SECRET;
   if(!secret||!state||!state.includes(".")) return null;
@@ -24,7 +25,39 @@ export default async function handler(req,res){
     const r=await fetch(p.token,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:new URLSearchParams(body)});
     const token=await r.json();
     if(!r.ok) return res.status(400).json({error:"Token exchange failed.",details:token});
-    return res.json({connected:true,provider:verified.provider,token_received:true,note:"Persist tokens in encrypted storage before production use."});
+    let subject=String(token.open_id||"");
+    let account={};
+    if(verified.provider==="youtube"){
+      const profile=await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&mine=true",{
+        headers:{Authorization:"Bearer "+token.access_token}
+      });
+      const data=await profile.json();
+      if(!profile.ok||!data.items?.[0]?.id) return res.status(400).json({error:"YouTube account lookup failed.",details:data});
+      subject=data.items[0].id;
+      account={
+        id:subject,
+        title:data.items[0].snippet?.title||"",
+        description:data.items[0].snippet?.description||"",
+        uploads_playlist_id:data.items[0].contentDetails?.relatedPlaylists?.uploads||null
+      };
+    } else {
+      const profile=await fetch("https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,display_name,avatar_url",{
+        headers:{Authorization:"Bearer "+token.access_token}
+      });
+      const data=await profile.json();
+      if(!profile.ok||!data.data?.user?.open_id) return res.status(400).json({error:"TikTok account lookup failed.",details:data});
+      subject=data.data.user.open_id;
+      account=data.data.user;
+    }
+    const saved=await saveTokenBundle({provider:verified.provider,subject,token});
+    return res.json({
+      connected:true,
+      provider:verified.provider,
+      connection_id:saved.connection_id,
+      account,
+      token_received:true,
+      note:"OAuth tokens are encrypted and stored in a private Vercel Blob object."
+    });
   }
   return res.json({connected:true,provider:verified.provider,authorization_code_received:Boolean(code),next:"Provider-specific Meta token exchange and encrypted token storage remain required."});
 }
