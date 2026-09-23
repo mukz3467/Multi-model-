@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Multi-Model AI</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui;background:#070b14;color:#eef4ff}button,input,textarea{font:inherit}
+.wrap{max-width:1100px;margin:auto;padding:28px}.hero{padding:24px 0}.hero h1{font-size:38px;margin:0 0 8px}.muted{color:#93a4bf}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.card{background:#101827;border:1px solid #23324b;border-radius:18px;padding:18px}.card h3{margin:0 0 8px}.toggle{display:flex;justify-content:space-between;align-items:center}.switch{width:48px;height:26px;border-radius:20px;border:0;background:#334155;cursor:pointer;position:relative}.switch.on{background:#2563eb}.switch:after{content:"";position:absolute;width:20px;height:20px;top:3px;left:4px;border-radius:50%;background:white;transition:.2s}.switch.on:after{left:24px}.panel{margin-top:18px}.drop{border:1px dashed #3a4b68;border-radius:16px;padding:28px;text-align:center}.btn{margin-top:14px;background:#2563eb;color:white;border:0;border-radius:12px;padding:12px 18px;cursor:pointer}.output{white-space:pre-wrap;background:#080d17;border-radius:14px;padding:16px;min-height:120px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<section class="hero"><div class="muted">MULTIMODAL WORKSPACE</div><h1>Multi-Model AI</h1><p class="muted">One workspace for text, image, audio and video intelligence.</p></section>
+<section class="grid" id="modules"></section>
+<section class="card panel">
+<h3>Workspace</h3><p class="muted">Upload a file or enter a prompt. Provider/API connections are intentionally separated from the interface.</p>
+<div class="drop"><input id="file" type="file" accept="image/*,audio/*,video/*,.txt,.pdf"><br><textarea id="prompt" rows="4" style="width:100%;margin-top:14px;background:#0b1220;color:white;border:1px solid #263751;border-radius:10px;padding:12px" placeholder="What should the AI do?"></textarea><br><button class="btn" onclick="run()">Run enabled modules</button></div>
+</section>
+<section class="card panel"><h3>Result</h3><div id="out" class="output">Ready.</div></section>
+</div>
+<script>
+const state={text:true,image:true,audio:true,video:true,editing:false,seo:true,analysis:true};
+const labels={text:["Text AI","Generate, rewrite and reason over text."],image:["Image AI","Analyze and work with images."],audio:["Audio AI","Transcribe and analyze audio."],video:["Video AI","Analyze video content and scenes."],editing:["AI Video Editing","Optional automated editing pipeline."],seo:["SEO Generator","Generate platform-specific metadata."],analysis:["Content Analysis","Analyze content and produce structured insights."]};
+function render(){document.querySelector("#modules").innerHTML=Object.entries(labels).map(([k,v])=>`<div class="card"><div class="toggle"><div><h3>${v[0]}</h3><div class="muted">${v[1]}</div></div><button class="switch ${state[k]?"on":""}" onclick="state['${k}']=!state['${k}'];render()" aria-label="Toggle ${v[0]}"></button></div></div>`).join("")}
+function run(){const enabled=Object.keys(state).filter(k=>state[k]);const file=document.querySelector("#file").files[0];const prompt=document.querySelector("#prompt").value.trim();document.querySelector("#out").textContent="Pipeline ready.\n\nEnabled: "+enabled.join(", ")+"\nFile: "+(file?file.name:"none")+"\nPrompt: "+(prompt||"none")+"\n\nNext layer: connect model providers/API endpoints to execute each enabled module."}
+render();
+</script>
+</body></html>
