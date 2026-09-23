@@ -50,14 +50,12 @@ export default async function handler(req,res){
       account=data.data.user;
     }
     const saved=await saveTokenBundle({provider:verified.provider,subject,token});
-    return res.json({
-      connected:true,
+    const qs=new URLSearchParams({
+      oauth:"connected",
       provider:verified.provider,
-      connection_id:saved.connection_id,
-      account,
-      token_received:true,
-      note:"OAuth tokens are encrypted and stored in a private Vercel Blob object."
+      connection_id:saved.connection_id
     });
+    return res.redirect(302,"/?"+qs.toString());
   }
   return res.json({connected:true,provider:verified.provider,authorization_code_received:Boolean(code),next:"Provider-specific Meta token exchange and encrypted token storage remain required."});
 }
