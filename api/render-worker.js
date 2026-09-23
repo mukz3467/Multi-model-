@@ -15,16 +15,18 @@ function auth(req) {
 function n(v,f=0){const x=Number(v);return Number.isFinite(x)&&x>=0?x:f;}
 function esc(v){return String(v||"").replace(/\\/g,"\\\\").replace(/:/g,"\\:").replace(/'/g,"\\'");}
 function filters(plan={}) {
+  const captions=Array.isArray(plan.captions)?plan.captions.slice(0,80):[];
+  const removes=(Array.isArray(plan.cuts)?plan.cuts:[]).filter(x=>x?.action==='remove'&&n(x.end)>n(x.start)).sort((a,b)=>n(a.start)-n(b.start)).slice(0,30);
   const out=[];
-  for(const c of (Array.isArray(plan.cuts)?plan.cuts:[]).filter(x=>x.action==="remove"&&n(x.end)>n(x.start)).slice(0,50)){
-    out.push(`trim=start=0:end=${n(c.start)},setpts=PTS-STARTPTS`);
+  // For cuts, build kept segments and concatenate them instead of trimming from zero repeatedly.
+  if(removes.length){
+    const seg=[]; let cursor=0;
+    for(const r of removes){ const s=n(r.start),e=n(r.end); if(s>cursor) seg.push('[0:v]trim=start='+cursor+':end='+s+',setpts=PTS-STARTPTS[v'+seg.length+']'); cursor=Math.max(cursor,e); }
+    if(seg.length){ const names=seg.map((_,i)=>'[v'+i+']').join(''); out.push(seg.join(';')+';'+names+'concat=n='+seg.length+':v=1:a=0,setpts=N/FRAME_RATE/TB'); }
   }
-  for(const c of (Array.isArray(plan.captions)?plan.captions:[]).slice(0,80)){
-    const s=n(c.start),e=n(c.end,s+2),t=esc(c.text);
-    if(t&&e>s) out.push(`drawtext=text='${t}':x=(w-text_w)/2:y=h*0.78:fontsize=h/22:fontcolor=white:borderw=4:bordercolor=black:enable='between(t,${s},${e})'`);
-  }
-  out.push("scale=1080:1920:force_original_aspect_ratio=decrease","pad=1080:1920:(ow-iw)/2:(oh-ih)/2");
-  return out.join(",");
+  for(const c of captions){ const s=n(c.start),e=n(c.end,s+2),t=esc(c.text); if(t&&e>s) out.push("drawtext=text='"+t+"':x=(w-text_w)/2:y=h*0.78:fontsize=h/22:fontcolor=white:borderw=4:bordercolor=black:enable='between(t,"+s+","+e+")'"); }
+  out.push('scale=1080:1920:force_original_aspect_ratio=decrease','pad=1080:1920:(ow-iw)/2:(oh-ih)/2');
+  return out.join(',');
 }
 async function body(req){if(req.body)return req.body;return JSON.parse(await new Response(req).text());}
 export default async function handler(req,res){
