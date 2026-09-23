@@ -1,0 +1,25 @@
+name: Multi-Model AI CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm install
+      - name: Syntax check API files
+        run: |
+          set -e
+          for f in api/*.js; do node --check "$f"; done
+      - name: Syntax check render worker
+        run: |
+          node --check render-worker/server.js
