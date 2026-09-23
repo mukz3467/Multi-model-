@@ -1,4 +1,4 @@
-import { get, put, list, issueSignedToken, presignUrl } from "@vercel/blob";
+import { get, put, list, del, issueSignedToken, presignUrl } from "@vercel/blob";
 
 const SETTINGS="settings/publishing-default.json";
 function todayUtc(){return new Date().toISOString().slice(0,10);}
@@ -6,6 +6,16 @@ async function readSettings(){const d=await get(SETTINGS,{access:"private",useCa
 async function writeSettings(x){await put(SETTINGS,JSON.stringify({...x,updated_at:new Date().toISOString()}),{access:"private",contentType:"application/json",allowOverwrite:true});}
 async function readJob(pathname){const d=await get(pathname,{access:"private",useCache:false});if(!d||d.statusCode!==200)return null;return await new Response(d.stream).json();}
 async function writeJob(pathname,job){await put(pathname,JSON.stringify({...job,updated_at:new Date().toISOString()}),{access:"private",contentType:"application/json",allowOverwrite:true});}
+async function acquireLock(jobId){
+  const pathname="publish-locks/"+jobId+".lock";
+  try{await put(pathname,JSON.stringify({job_id:jobId,created_at:new Date().toISOString()}),{access:"private",contentType:"application/json",addRandomSuffix:false,allowOverwrite:false});return pathname;}
+  catch(e){return null;}
+}
+async function releaseLock(pathname){if(!pathname)return;try{await del(pathname);}catch{}}
+function transientError(error){
+  const m=String(error?.message||"").toLowerCase();
+  return /429|rate.?limit|too many|timeout|timed out|temporar|network|fetch failed|502|503|504|econn|socket|gateway/.test(m);
+}
 function cronAuthorized(req){const secret=process.env.CRON_SECRET;return Boolean(secret&&req.headers.authorization==="Bearer "+secret);}
 async function signedMediaUrl(pathname){const token=await issueSignedToken({pathname,operations:["get"]});const {presignedUrl}=await presignUrl(token,{pathname,operation:"get",validUntil:Date.now()+60*60*1000});return presignedUrl;}
 async function getLearning(base,job){
@@ -87,7 +97,24 @@ export default async function handler(req,res){
     if(remaining<=0)return res.status(200).json({processed:0,reason:"daily_limit_reached",scheduled:scheduled.length,scheduled_jobs:scheduled,daily_limit:settings.daily_limit,published_today:settings.published_today,daily_remaining:0});
     const now=Date.now(),candidates=all.filter(x=>x.job.scheduled_at&&new Date(x.job.scheduled_at).getTime()<=now);
     const mode=settings.selection_mode==="ai_best"?"ai_best":"queue_order",selected=await selectCandidates(base,candidates,mode,remaining),results=[];
-    for(const item of selected){const job=item.job;try{await writeJob(item.pathname,{...job,status:"publishing",stage:"preparing",attempts:Number(job.attempts||0)+1});const mediaUrl=await signedMediaUrl(job.source_pathname);const payload={platform:job.platform,connection_id:job.connection_id,video_url:mediaUrl,caption:job.caption,title:job.title,page_id:job.page_id};const r=await fetch(base.replace(/\/$/,"")+"/api/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await r.json();if(!r.ok)throw new Error(data.error||"Platform publish failed.");const finalStatus=data.published===true?"published":"submitted";await writeJob(item.pathname,{...job,status:finalStatus,stage:finalStatus,provider_response:data,published_at:finalStatus==="published"?new Date().toISOString():null});if(finalStatus==="published"||data.publish_id||data.video_id||data.media_id){settings.published_today=Number(settings.published_today||0)+1;await writeSettings(settings);}results.push({id:job.id,platform:job.platform,status:finalStatus,data});}catch(error){await writeJob(item.pathname,{...job,status:"failed",stage:"failed",error:error?.message||"Publish failed"});results.push({id:job.id,platform:job.platform,status:"failed",error:error?.message||"Publish failed"});}}
+    for(const item of selected){const job=item.job;let lockPath=null;try{
+      lockPath=await acquireLock(job.id);
+      if(!lockPath){results.push({id:job.id,platform:job.platform,status:"skipped",reason:"publish_lock_active"});continue;}
+      const attempt=Number(job.attempts||0)+1;
+      await writeJob(item.pathname,{...job,status:"publishing",stage:"preparing",attempts:attempt,next_retry_at:null,last_error:null});const mediaUrl=await signedMediaUrl(job.source_pathname);const payload={platform:job.platform,connection_id:job.connection_id,video_url:mediaUrl,caption:job.caption,title:job.title,page_id:job.page_id};const r=await fetch(base.replace(/\/$/,"")+"/api/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await r.json();if(!r.ok)throw new Error(data.error||"Platform publish failed.");const finalStatus=data.published===true?"published":"submitted";await writeJob(item.pathname,{...job,status:finalStatus,stage:finalStatus,provider_response:data,published_at:finalStatus==="published"?new Date().toISOString():null});if(finalStatus==="published"||data.publish_id||data.video_id||data.media_id){settings.published_today=Number(settings.published_today||0)+1;await writeSettings(settings);}results.push({id:job.id,platform:job.platform,status:finalStatus,data});}catch(error){
+      const message=error?.message||"Publish failed";
+      const attempts=Number(job.attempts||0)+1;
+      const retryable=transientError(error)&&attempts<4;
+      if(retryable){
+        const delay=Math.min(60,5*Math.pow(2,attempts-1));
+        const next=new Date(Date.now()+delay*60*1000).toISOString();
+        await writeJob(item.pathname,{...job,status:"queued",stage:"retry_wait",attempts,next_retry_at:next,last_error:message});
+        results.push({id:job.id,platform:job.platform,status:"retry_scheduled",attempts,next_retry_at:next,error:message});
+      }else{
+        await writeJob(item.pathname,{...job,status:"failed",stage:"failed",attempts,last_error:message,error:message});
+        results.push({id:job.id,platform:job.platform,status:"failed",attempts,error:message});
+      }
+    }finally{await releaseLock(lockPath);}}
     return res.status(200).json({processed:results.length,scheduled:scheduled.length,scheduled_jobs:scheduled,selection_mode:mode,selected_ids:selected.map(x=>x.job.id),results,daily_limit:settings.daily_limit,published_today:settings.published_today,daily_remaining:Math.max(0,Number(settings.daily_limit)-Number(settings.published_today||0))});
   }catch(error){return res.status(500).json({error:error?.message||"Auto-publish queue error."});}
 }
