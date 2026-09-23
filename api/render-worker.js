@@ -14,7 +14,7 @@ function auth(req) {
 }
 function n(v, f = 0) {
   const x = Number(v);
-  return Number.isFinite(v = Number(v)) && v >= 0 ? v : f;
+  return Number.isFinite(x) && x >= 0 ? x : f;
 }
 function clamp(v, min, max, f) {
   const x = Number(v);
@@ -27,13 +27,41 @@ function esc(v) {
     .replace(/'/g, "\\'");
 }
 
-function buildVideoGraph(plan = {}) {
-  const captions = Array.isArray(plan.captions) ? plan.captions.slice(0, 80) : [];
-  const overlays = Array.isArray(plan.overlays) ? plan.overlays.slice(0, 50) : [];
-  const cuts = (Array.isArray(plan.cuts) ? plan.cuts : [])
+function normalizeCuts(plan = {}) {
+  return (Array.isArray(plan.cuts) ? plan.cuts : [])
     .filter(x => x?.action === "remove" && n(x.end) > n(x.start))
     .sort((a, b) => n(a.start) - n(b.start))
     .slice(0, 30);
+}
+
+function mapTime(t, cuts) {
+  let x = n(t);
+  let removed = 0;
+  for (const c of cuts) {
+    const s = n(c.start), e = n(c.end);
+    if (x >= e) removed += e - s;
+    else if (x > s) return s - removed;
+    else break;
+  }
+  return Math.max(0, x - removed);
+}
+
+function mapWindow(start, end, cuts) {
+  const s = mapTime(start, cuts);
+  const e = mapTime(end, cuts);
+  return { start: s, end: Math.max(s, e) };
+}
+
+async function downloadFile(url, file) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Asset download failed: ${r.status}`);
+  await fs.writeFile(file, Buffer.from(await r.arrayBuffer()));
+}
+
+function buildVideoGraph(plan = {}, brollInputs = []) {
+  const captions = Array.isArray(plan.captions) ? plan.captions.slice(0, 80) : [];
+  const overlays = Array.isArray(plan.overlays) ? plan.overlays.slice(0, 50) : [];
+  const cuts = normalizeCuts(plan);
 
   const parts = [];
   let source = "[0:v]";
@@ -51,10 +79,11 @@ function buildVideoGraph(plan = {}) {
 
     const v = [], a = [];
     segments.forEach((seg, i) => {
-      const t = seg.end == null ? `start=${seg.start}` : `start=${seg.start}:end=${seg.end}`;
+      const vt = seg.end == null ? `start=${seg.start}` : `start=${seg.start}:end=${seg.end}`;
+      const at = seg.end == null ? `start=${seg.start}` : `start=${seg.start}:end=${seg.end}`;
       const vl = `vcut${i}`, al = `acut${i}`;
-      parts.push(`[0:v]trim=${t},setpts=PTS-STARTPTS[${vl}]`);
-      parts.push(`[0:a]atrim=${t},asetpts=PTS-STARTPTS[${al}]`);
+      parts.push(`[0:v]trim=${vt},setpts=PTS-STARTPTS[${vl}]`);
+      parts.push(`[0:a]atrim=${at},asetpts=PTS-STARTPTS[${al}]`);
       v.push(`[${vl}]`);
       a.push(`[${al}]`);
     });
@@ -69,58 +98,78 @@ function buildVideoGraph(plan = {}) {
   let current = "[vbase]";
   let index = 0;
 
-  // Evidence-based punch-in / zoom effects.
   for (const o of overlays) {
     if (o.type !== "zoom") continue;
-    const start = n(o.start), end = n(o.end, start + 1);
-    if (end <= start) continue;
+    const w = mapWindow(n(o.start), n(o.end, n(o.start) + 1), cuts);
+    if (w.end <= w.start) continue;
     const amount = clamp(o.amount ?? o.zoom ?? 1.08, 1, 1.35, 1.08);
     const out = `vfx${index++}`;
     parts.push(
-      `${current}zoompan=z='if(between(in_time,${start},${end}),${amount},1)':d=1:s=1080x1920:fps=30:eval=frame[${out}]`
+      `${current}zoompan=z='if(between(in_time,${w.start},${w.end}),${amount},1)':d=1:s=1080x1920:fps=30:eval=frame[${out}]`
     );
     current = `[${out}]`;
   }
 
-  // Dynamic captions and safe text overlays are rendered directly into the video.
   for (const c of captions) {
-    const start = n(c.start), end = n(c.end, start + 2), text = esc(c.text);
-    if (!text || end <= start) continue;
+    const w = mapWindow(n(c.start), n(c.end, n(c.start) + 2), cuts);
+    const text = esc(c.text);
+    if (!text || w.end <= w.start) continue;
     const out = `vfx${index++}`;
     const y = c.position === "center" ? "h*0.50" : c.position === "top" ? "h*0.16" : "h*0.78";
     parts.push(
-      `${current}drawtext=text='${text}':x=(w-text_w)/2:y=${y}:fontsize=h/22:fontcolor=white:borderw=4:bordercolor=black:box=1:boxcolor=black@0.28:enable='between(t,${start},${end})'[${out}]`
+      `${current}drawtext=text='${text}':x=(w-text_w)/2:y=${y}:fontsize=h/22:fontcolor=white:borderw=4:bordercolor=black:box=1:boxcolor=black@0.28:enable='between(t,${w.start},${w.end})'[${out}]`
     );
     current = `[${out}]`;
   }
 
-  // Text / highlight overlays are supported without pretending external B-roll exists.
   for (const o of overlays) {
     if (!["text", "highlight"].includes(o.type)) continue;
-    const start = n(o.start), end = n(o.end, start + 2);
+    const w = mapWindow(n(o.start), n(o.end, n(o.start) + 2), cuts);
     const text = esc(o.text || o.instruction || "");
-    if (!text || end <= start) continue;
+    if (!text || w.end <= w.start) continue;
     const out = `vfx${index++}`;
     const y = o.position === "top" ? "h*0.16" : o.position === "center" ? "h*0.50" : "h*0.68";
     parts.push(
-      `${current}drawtext=text='${text}':x=(w-text_w)/2:y=${y}:fontsize=h/25:fontcolor=white:borderw=3:bordercolor=black:box=1:boxcolor=black@0.38:enable='between(t,${start},${end})'[${out}]`
+      `${current}drawtext=text='${text}':x=(w-text_w)/2:y=${y}:fontsize=h/25:fontcolor=white:borderw=3:bordercolor=black:box=1:boxcolor=black@0.38:enable='between(t,${w.start},${w.end})'[${out}]`
+    );
+    current = `[${out}]`;
+  }
+
+  // Only overlay B-roll when an upstream stage supplied a real asset URL.
+  for (let i = 0; i < brollInputs.length; i++) {
+    const item = brollInputs[i];
+    const w = mapWindow(n(item.start), n(item.end, n(item.start) + 2), cuts);
+    if (w.end <= w.start) continue;
+    const inputIndex = i + 1;
+    const scaled = `brollscaled${i}`;
+    const out = `brollout${i}`;
+    const opacity = clamp(item.opacity ?? 1, 0.05, 1, 1);
+    const position = item.position === "top" ? "(W-w)/2:80" :
+      item.position === "bottom" ? "(W-w)/2:H-h-120" :
+      item.position === "left" ? "80:(H-h)/2" :
+      item.position === "right" ? "W-w-80:(H-h)/2" : "(W-w)/2:(H-h)/2";
+    const width = clamp(item.width ?? (item.mode === "full" ? 1080 : 760), 180, 1080, 760);
+    parts.push(
+      `[${inputIndex}:v]setpts=PTS-STARTPTS,scale=${width}:-2:force_original_aspect_ratio=decrease,format=rgba,colorchannelmixer=aa=${opacity}[${scaled}]`
+    );
+    parts.push(
+      `${current}[${scaled}]overlay=x=${position.split(":")[0]}:y=${position.split(":")[1]}:enable='between(t,${w.start},${w.end})':eof_action=repeat[${out}]`
     );
     current = `[${out}]`;
   }
 
   parts.push(`${current}format=yuv420p[vfinal]`);
 
-  // Audio decisions: ducking is implemented as a conservative volume reduction.
   let audio = audioSource;
   const audioPlan = Array.isArray(plan.audio) ? plan.audio : [];
   let audioIndex = 0;
   for (const a of audioPlan) {
     if (a.action !== "duck") continue;
-    const start = n(a.start), end = n(a.end, start + 1);
-    if (end <= start) continue;
+    const w = mapWindow(n(a.start), n(a.end, n(a.start) + 1), cuts);
+    if (w.end <= w.start) continue;
     const out = `aduck${audioIndex++}`;
     const amount = clamp(a.amount ?? 0.35, 0.05, 1, 0.35);
-    parts.push(`${audio}volume=enable='between(t,${start},${end})':volume=${amount}[${out}]`);
+    parts.push(`${audio}volume=enable='between(t,${w.start},${w.end})':volume=${amount}[${out}]`);
     audio = `[${out}]`;
   }
 
@@ -147,9 +196,24 @@ async function handler(req, res) {
     if (!src.ok) throw new Error(`Source download failed: ${src.status}`);
     await fs.writeFile(input, Buffer.from(await src.arrayBuffer()));
 
-    const { filterComplex, mapVideo, mapAudio } = buildVideoGraph(b.plan || {});
+    const rawBroll = Array.isArray(b.plan?.broll) ? b.plan.broll : [];
+    const broll = rawBroll
+      .filter(x => x?.asset_url || x?.source_url)
+      .slice(0, 12)
+      .map((x, i) => ({ ...x, url: x.asset_url || x.source_url, i }));
+
+    const brollInputs = [];
+    const inputArgs = ["-y", "-i", input];
+    for (const item of broll) {
+      const file = path.join(dir, `broll-${item.i}`);
+      await downloadFile(item.url, file);
+      brollInputs.push(item);
+      inputArgs.push("-i", file);
+    }
+
+    const { filterComplex, mapVideo, mapAudio } = buildVideoGraph(b.plan || {}, brollInputs);
     const args = [
-      "-y", "-i", input,
+      ...inputArgs,
       "-filter_complex", filterComplex,
       "-map", mapVideo, "-map", mapAudio,
       "-c:v", "libx264",
@@ -182,6 +246,7 @@ async function handler(req, res) {
         cuts: Array.isArray(b.plan?.cuts),
         captions: Array.isArray(b.plan?.captions),
         overlays: Array.isArray(b.plan?.overlays),
+        broll: broll.length,
         audio: Array.isArray(b.plan?.audio)
       },
       renderer: "vercel-ffmpeg"
