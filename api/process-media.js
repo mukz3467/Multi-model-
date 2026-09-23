@@ -42,8 +42,8 @@ export default async function handler(req,res){
   if(req.method!=="GET")return res.status(405).json({error:"GET only"});
   if(!ok(req))return res.status(401).json({error:"Unauthorized"});
   const key=process.env.GEMINI_API_KEY;if(!key)return res.status(500).json({error:"GEMINI_API_KEY is not configured."});
-  const worker=process.env.RENDER_WORKER_URL;
-  if(!worker)return res.status(500).json({error:"RENDER_WORKER_URL is not configured. Deploy the render-worker and add its URL to Vercel."});
+  const worker=(process.env.RENDER_WORKER_URL || ((process.env.APP_BASE_URL||"").replace(/\/$/,"")+"/api/render-worker")).replace(/\/$/,"");
+  if(!worker)return res.status(500).json({error:"APP_BASE_URL is required when RENDER_WORKER_URL is not configured."});
 
   const bs=await list({prefix:"jobs/",limit:20});let item=null;
   for(const b of bs.blobs||[]){const j=await read(b.pathname).catch(()=>null);if(j?.status==="uploaded"){item={p:b.pathname,j};break;}}
