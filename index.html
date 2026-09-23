@@ -2,39 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Multi-Model AI</title>
+<title>Multi-Model AI — Autonomous Media Workspace</title>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui;background:#070b14;color:#eef4ff}
-button,input,textarea{font:inherit}.wrap{max-width:1100px;margin:auto;padding:28px}.hero{padding:24px 0}
-.hero h1{font-size:38px;margin:0 0 8px}.muted{color:#93a4bf}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-.card{background:#101827;border:1px solid #23324b;border-radius:18px;padding:18px}.card h3{margin:0 0 8px}
-.toggle{display:flex;justify-content:space-between;align-items:center}.switch{width:48px;height:26px;border-radius:20px;border:0;background:#334155;cursor:pointer;position:relative}
-.switch.on{background:#2563eb}.switch:after{content:"";position:absolute;width:20px;height:20px;top:3px;left:4px;border-radius:50%;background:white;transition:.2s}.switch.on:after{left:24px}
-.panel{margin-top:18px}.drop{border:1px dashed #3a4b68;border-radius:16px;padding:28px;text-align:center}
-.btn{margin:8px 6px 0 0;background:#2563eb;color:white;border:0;border-radius:12px;padding:12px 18px;cursor:pointer}
-.btn.secondary{background:#17243a}.btn:disabled{opacity:.55;cursor:wait}
-.output{white-space:pre-wrap;background:#080d17;border-radius:14px;padding:16px;min-height:160px;line-height:1.5}
-.status{margin-top:10px;font-size:13px;color:#93a4bf}.preview{max-width:100%;max-height:280px;margin-top:14px;border-radius:12px;display:none}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui;background:#050914;color:#eef4ff}
+button,input,textarea,select{font:inherit}.wrap{max-width:1180px;margin:auto;padding:24px}
+.hero{padding:28px 0}.eyebrow{color:#6ea8ff;font-size:12px;letter-spacing:2px}.hero h1{font-size:42px;margin:8px 0}.muted{color:#91a4c2}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.card{background:#0d1524;border:1px solid #20314c;border-radius:18px;padding:18px;box-shadow:0 12px 40px #0004}
+.card h3{margin:0 0 8px}.toggle{display:flex;justify-content:space-between;align-items:center}
+.switch{width:48px;height:26px;border:0;border-radius:20px;background:#334155;position:relative;cursor:pointer}.switch.on{background:#2563eb}
+.switch:after{content:"";position:absolute;width:20px;height:20px;top:3px;left:4px;border-radius:50%;background:#fff;transition:.2s}.switch.on:after{left:24px}
+.panel{margin-top:18px}.drop{border:1px dashed #385070;border-radius:16px;padding:24px;text-align:center}
+.btn{margin:8px 6px 0 0;background:#2563eb;color:#fff;border:0;border-radius:11px;padding:11px 16px;cursor:pointer}.btn.secondary{background:#18263d}.btn.good{background:#13795b}.btn:disabled{opacity:.5;cursor:wait}
+textarea,input,select{background:#09111f;color:#fff;border:1px solid #263b5b;border-radius:10px;padding:11px}
+textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;margin:14px auto;border-radius:12px;display:none}
+.output{white-space:pre-wrap;background:#070d18;border-radius:12px;padding:16px;min-height:170px;line-height:1.5;overflow:auto}
+.status{margin-top:10px;font-size:13px;color:#91a4c2}.pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#13223a;color:#8db8ff;font-size:12px;margin:3px}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;text-align:left}.metric{padding:12px;background:#09111f;border-radius:12px}.metric b{display:block;font-size:20px}
 </style>
 </head>
-<body>
-<div class="wrap">
-<section class="hero"><div class="muted">MULTIMODAL WORKSPACE</div><h1>Multi-Model AI</h1>
-<p class="muted">Professional multimodal analysis, AI editing plans, SEO intelligence and media workflows.</p></section>
+<body><div class="wrap">
+<section class="hero"><div class="eyebrow">AUTONOMOUS MULTIMODAL WORKSPACE</div><h1>Multi-Model AI</h1>
+<p class="muted">Analyze → edit → optimize → schedule → publish → learn.</p>
+<span class="pill">Video Intelligence</span><span class="pill">SEO</span><span class="pill">Media Manager</span><span class="pill">Autopilot</span></section>
+
 <section class="grid" id="modules"></section>
 
-<section class="card panel"><h3>Workspace</h3>
-<p class="muted">Upload a source file and choose exactly what the AI should do.</p>
-<div class="drop">
-<input id="file" type="file" accept="image/*,audio/*,video/*,.txt,.pdf">
-<img id="preview" class="preview" alt="Preview">
-<textarea id="prompt" rows="5" style="width:100%;margin-top:14px;background:#0b1220;color:white;border:1px solid #263751;border-radius:10px;padding:12px" placeholder="Example: Turn this raw video into a high-retention 9:16 short. Find the strongest hook, remove weak parts, create captions and generate platform SEO."></textarea>
-<br>
-<button id="runBtn" class="btn" onclick="run()">Run AI Pipeline</button>
-<button id="planBtn" class="btn secondary" onclick="createEditPlan()">Build Edit Plan</button>
-<button id="renderBtn" class="btn secondary" onclick="renderVideo()" disabled>Render Edited Video</button>
-<div id="status" class="status">Ready.</div>
-</div></section>
+<section class="card panel"><h3>Content Workspace</h3><p class="muted">Upload raw media and let the model build the intelligence layer.</p>
+<div class="drop"><input id="file" type="file" accept="image/*,audio/*,video/*,.txt,.pdf"><img id="preview" class="preview" alt="Preview">
+<textarea id="prompt" rows="4" placeholder="Example: Turn this raw video into a high-retention 9:16 short, then prepare platform-specific SEO and a publishing recommendation."></textarea>
+<button id="runBtn" class="btn" onclick="run()">Run AI Pipeline</button><button id="planBtn" class="btn secondary" onclick="createEditPlan()">Build Edit Plan</button><button id="renderBtn" class="btn secondary" onclick="renderVideo()" disabled>Render Edited Video</button>
+<div id="status" class="status">Ready.</div></div></section>
+
+<section class="card panel"><h3>Account Intelligence & Autopilot</h3>
+<div class="row">
+<div><label class="muted">Platform</label><select id="platform"><option>youtube</option><option>instagram</option><option>facebook</option><option>tiktok</option></select></div>
+<div><label class="muted">Topic</label><input id="topic" placeholder="e.g. business tips"></div>
+<div><label class="muted">Candidate hours</label><input id="hours" value="9,12,15,18,21"></div>
+</div>
+<button class="btn good" onclick="runAutopilot()">Analyze & Choose Schedule</button>
+<button class="btn secondary" onclick="checkConnectors()">Check Platform Connections</button>
+</section>
 
 <section class="card panel"><h3>AI Result</h3><div id="out" class="output">Ready.</div></section>
 </div>
@@ -42,96 +50,16 @@ button,input,textarea{font:inherit}.wrap{max-width:1100px;margin:auto;padding:28
 <script>
 const state={text:true,image:true,audio:true,video:true,editing:false,seo:true,analysis:true};
 let latestPlan=null;
-
-const labels={
-text:["Text AI","Generate, rewrite and reason over text."],
-image:["Image AI","Analyze images and visual context."],
-audio:["Audio AI","Transcribe and analyze audio."],
-video:["Video AI","Analyze video content and scenes."],
-editing:["AI Video Editing","Build a professional edit decision plan."],
-seo:["SEO Intelligence","Generate platform-specific SEO."],
-analysis:["Media Analysis","Analyze content and performance signals."]
-};
-
-function render(){
- document.querySelector("#modules").innerHTML=Object.entries(labels).map(([k,v]) =>
- '<div class="card"><div class="toggle"><div><h3>'+v[0]+'</h3><div class="muted">'+v[1]+
- '</div></div><button class="switch '+(state[k]?"on":"")+'" onclick="toggleModule(\''+k+'\')" aria-label="Toggle '+v[0]+'"></button></div></div>'
- ).join("");
-}
-function toggleModule(k){state[k]=!state[k];render();}
-
-document.querySelector("#file").addEventListener("change",e=>{
- const f=e.target.files[0],p=document.querySelector("#preview");
- if(f&&f.type.startsWith("image/")){p.src=URL.createObjectURL(f);p.style.display="block";}
- else{p.style.display="none";p.removeAttribute("src");}
- latestPlan=null;document.querySelector("#renderBtn").disabled=true;
-});
-
-function fileToBase64(file){
- return new Promise((resolve,reject)=>{
-  const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(",")[1]||"");
-  reader.onerror=reject;reader.readAsDataURL(file);
- });
-}
-
-function moduleInstructions(enabled){
- const tasks=[];
- if(enabled.includes("text"))tasks.push("Handle the text request intelligently.");
- if(enabled.includes("image"))tasks.push("Analyze visual content, objects, visible text and context.");
- if(enabled.includes("audio"))tasks.push("Transcribe and summarize audio when possible.");
- if(enabled.includes("video"))tasks.push("Analyze topic, hook, scenes, pacing, audience and notable moments.");
- if(enabled.includes("analysis"))tasks.push("Return topic, audience, hook, strengths, weaknesses and improvement ideas.");
- if(enabled.includes("seo"))tasks.push("Create separate YouTube, Instagram Reels, TikTok and Facebook Reels SEO packages.");
- if(enabled.includes("editing"))tasks.push("Create a concrete professional edit plan with cuts, captions, B-roll, pacing, transitions, audio cues, CTA and 9:16 guidance.");
- return tasks.join("\n");
-}
-
-async function run(){
- const enabled=Object.keys(state).filter(k=>state[k]),file=document.querySelector("#file").files[0];
- const prompt=document.querySelector("#prompt").value.trim(),out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#runBtn");
- if(!prompt&&!file){out.textContent="Please enter a prompt or upload a file.";return;}
- btn.disabled=true;status.textContent="AI pipeline running...";out.textContent="Analyzing...";
- try{
-  let data="";if(file){if(file.size>15*1024*1024)throw new Error("Keep files under 15 MB in this version.");data=await fileToBase64(file);}
-  const fullPrompt="You are a professional multimodal media intelligence engine.\nEnabled: "+enabled.join(", ")+"\n\nTasks:\n"+moduleInstructions(enabled)+"\n\nUser request:\n"+(prompt||"Analyze uploaded content.")+"\n\nBe factual. Never invent analytics, trends, timestamps or metrics.";
-  const response=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:fullPrompt,mimeType:file?.type||"",data,editing:state.editing,seo:state.seo,analysis:state.analysis})});
-  const json=await response.json();if(!response.ok)throw new Error(json.error||"API request failed.");
-  out.textContent=json.text||"No result returned.";status.textContent="Analysis completed.";
- }catch(e){out.textContent="Error: "+e.message;status.textContent="Pipeline failed."}
- finally{btn.disabled=false;}
-}
-
-async function createEditPlan(){
- const file=document.querySelector("#file").files[0],out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#planBtn");
- if(!file||!file.type.startsWith("video/")){out.textContent="Upload a video first.";return;}
- if(file.size>15*1024*1024){out.textContent="Keep the video under 15 MB in this version.";return;}
- btn.disabled=true;status.textContent="Building professional edit decision list...";out.textContent="Analyzing video for hook, cuts, captions and pacing...";
- try{
-  const data=await fileToBase64(file);
-  const r=await fetch("/api/edit-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mimeType:file.type,data,instruction:document.querySelector("#prompt").value.trim()})});
-  const j=await r.json();if(!r.ok)throw new Error(j.error||"Edit-plan request failed.");
-  latestPlan=j.plan;document.querySelector("#renderBtn").disabled=false;
-  out.textContent=JSON.stringify(j.plan,null,2);status.textContent="Edit plan ready. Review it before rendering.";
- }catch(e){out.textContent="Error: "+e.message;status.textContent="Edit planning failed."}
- finally{btn.disabled=false;}
-}
-
-async function renderVideo(){
- const file=document.querySelector("#file").files[0],out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#renderBtn");
- if(!file||!latestPlan)return;
- btn.disabled=true;status.textContent="Rendering video...";out.textContent="FFmpeg render worker is processing the edit plan...";
- try{
-  const data=await fileToBase64(file);
-  const r=await fetch("/api/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({videoBase64:data,plan:latestPlan})});
-  if(!r.ok){let j={};try{j=await r.json()}catch{}throw new Error(j.error||j.details||"Render failed.");}
-  const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");
-  a.href=url;a.download="multi-model-edited.mp4";a.textContent="Download edited video";
-  a.className="btn";out.innerHTML="Render completed. ";out.appendChild(a);status.textContent="Video render completed.";
- }catch(e){out.textContent="Render error: "+e.message;status.textContent="Rendering failed."}
- finally{btn.disabled=false;}
-}
+const labels={text:["Text AI","Generate and reason over text."],image:["Image AI","Analyze visual content."],audio:["Audio AI","Transcribe and analyze audio."],video:["Video AI","Analyze scenes and content."],editing:["AI Video Editing","Build an edit decision list."],seo:["SEO Intelligence","Create platform-specific SEO."],analysis:["Media Analysis","Analyze performance signals."]};
+function render(){document.querySelector("#modules").innerHTML=Object.entries(labels).map(([k,v])=>'<div class="card"><div class="toggle"><div><h3>'+v[0]+'</h3><div class="muted">'+v[1]+'</div></div><button class="switch '+(state[k]?"on":"")+'" onclick="toggleModule(\''+k+'\')"></button></div></div>').join("")}
+function toggleModule(k){state[k]=!state[k];render()}
+document.querySelector("#file").addEventListener("change",e=>{const f=e.target.files[0],p=document.querySelector("#preview");if(f?.type.startsWith("image/")){p.src=URL.createObjectURL(f);p.style.display="block"}else{p.style.display="none";p.removeAttribute("src")}latestPlan=null;document.querySelector("#renderBtn").disabled=true});
+function fileToBase64(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(",")[1]||"");r.onerror=reject;r.readAsDataURL(file)})}
+function moduleInstructions(enabled){const t=[];if(enabled.includes("text"))t.push("Handle the text request.");if(enabled.includes("image"))t.push("Analyze objects, visible text and visual context.");if(enabled.includes("audio"))t.push("Transcribe and analyze audio.");if(enabled.includes("video"))t.push("Analyze topic, hook, scenes, pacing and notable moments.");if(enabled.includes("analysis"))t.push("Return audience, strengths, weaknesses and improvements.");if(enabled.includes("seo"))t.push("Create separate YouTube, Instagram, TikTok and Facebook SEO packages.");if(enabled.includes("editing"))t.push("Create a professional edit plan with cuts, captions, B-roll, pacing, transitions, audio cues and 9:16 guidance.");return t.join("\n")}
+async function run(){const enabled=Object.keys(state).filter(k=>state[k]),file=document.querySelector("#file").files[0],prompt=document.querySelector("#prompt").value.trim(),out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#runBtn");if(!prompt&&!file){out.textContent="Enter a prompt or upload a file.";return}btn.disabled=true;status.textContent="AI pipeline running...";out.textContent="Analyzing...";try{let data="";if(file){if(file.size>15*1024*1024)throw Error("Keep files under 15 MB in this version.");data=await fileToBase64(file)}const fullPrompt="You are a professional multimodal media intelligence engine. Enabled: "+enabled.join(", ")+"\nTasks:\n"+moduleInstructions(enabled)+"\nUser request:\n"+(prompt||"Analyze uploaded content.")+"\nNever invent analytics, trends, timestamps or metrics.";const r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:fullPrompt,mimeType:file?.type||"",data,editing:state.editing,seo:state.seo,analysis:state.analysis})});const j=await r.json();if(!r.ok)throw Error(j.error||"API request failed.");out.textContent=j.text||"No result.";status.textContent="Analysis completed."}catch(e){out.textContent="Error: "+e.message;status.textContent="Pipeline failed."}finally{btn.disabled=false}}
+async function createEditPlan(){const file=document.querySelector("#file").files[0],out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#planBtn");if(!file||!file.type.startsWith("video/")){out.textContent="Upload a video first.";return}if(file.size>15*1024*1024){out.textContent="Keep video under 15 MB in this version.";return}btn.disabled=true;status.textContent="Building edit decision list...";try{const data=await fileToBase64(file);const r=await fetch("/api/edit-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mimeType:file.type,data,instruction:document.querySelector("#prompt").value.trim()})});const j=await r.json();if(!r.ok)throw Error(j.error||"Edit plan failed.");latestPlan=j.plan;document.querySelector("#renderBtn").disabled=false;out.textContent=JSON.stringify(j.plan,null,2);status.textContent="Edit plan ready."}catch(e){out.textContent="Error: "+e.message;status.textContent="Planning failed."}finally{btn.disabled=false}}
+async function renderVideo(){const file=document.querySelector("#file").files[0],out=document.querySelector("#out"),status=document.querySelector("#status"),btn=document.querySelector("#renderBtn");if(!file||!latestPlan)return;btn.disabled=true;status.textContent="Rendering...";try{const data=await fileToBase64(file);const r=await fetch("/api/render",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({videoBase64:data,plan:latestPlan})});if(!r.ok){let j={};try{j=await r.json()}catch{}throw Error(j.error||j.details||"Render failed.")}const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="multi-model-edited.mp4";a.textContent="Download edited video";a.className="btn";out.innerHTML="Render completed. ";out.appendChild(a);status.textContent="Render completed."}catch(e){out.textContent="Render error: "+e.message;status.textContent="Rendering failed."}finally{btn.disabled=false}}
+async function checkConnectors(){const out=document.querySelector("#out");try{const r=await fetch("/api/platform-connectors");const j=await r.json();out.textContent=JSON.stringify(j,null,2)}catch(e){out.textContent="Connection check failed: "+e.message}}
+async function runAutopilot(){const out=document.querySelector("#out"),status=document.querySelector("#status");const platform=document.querySelector("#platform").value,topic=document.querySelector("#topic").value.trim()||null;const hours=document.querySelector("#hours").value.split(",").map(x=>Number(x.trim())).filter(Number.isFinite).map(hour=>({hour,minutes_from_now:120}));if(!hours.length){out.textContent="Enter candidate hours.";return}status.textContent="Analyzing account signals and schedule windows...";out.textContent="Autopilot running...";try{const r=await fetch("/api/autopilot",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:{platform,topic,format:"short_video"},account:{platform},posts:[],candidate_windows:hours})});const j=await r.json();if(!r.ok)throw Error(j.error||"Autopilot failed.");out.textContent=JSON.stringify(j,null,2);status.textContent="Schedule analysis completed."}catch(e){out.textContent="Autopilot error: "+e.message;status.textContent="Autopilot failed."}}
 render();
-</script>
-</body>
-</html>
+</script></body></html>
