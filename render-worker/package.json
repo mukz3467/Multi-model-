@@ -6,6 +6,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@vercel/blob": "^2.6.1",
     "express": "^5.1.0"
   }
 }
