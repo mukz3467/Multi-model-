@@ -51,6 +51,11 @@ async function autoSchedule(base,jobs,dailyLimit){
       }
       await writeJob(item.pathname,{...item.job,scheduled_at:chosen.scheduled_at,schedule_source:insights?"account_evidence":"fallback",schedule_confidence:insights?"account_specific":"insufficient_evidence"});
       usedKeys.add(new Date(chosen.scheduled_at).toISOString().slice(0,13));const day=new Date(chosen.scheduled_at).toISOString().slice(0,10);dailyCounts.set(day,(dailyCounts.get(day)||0)+1);
+      // Keep the in-memory queue in sync so a newly scheduled job can be published
+      // during this same cron invocation instead of waiting for the next run.
+      item.job.scheduled_at=chosen.scheduled_at;
+      item.job.schedule_source=insights?"account_evidence":"fallback";
+      item.job.schedule_confidence=insights?"account_specific":"insufficient_evidence";
       updates.push({id:item.job.id,scheduled_at:chosen.scheduled_at,source:insights?"account_evidence":"fallback"});
     }
   }
@@ -73,10 +78,13 @@ export default async function handler(req,res){
       await writeJob(pathname,job);return res.status(202).json({job});
     }
     if(req.method!=="GET")return res.status(405).json({error:"GET or POST only"});if(!cronAuthorized(req))return res.status(401).json({error:"Unauthorized cron request."});
-    const settings=await readSettings(),remaining=Math.max(0,Number(settings.daily_limit||2)-Number(settings.published_today||0));if(remaining<=0)return res.status(200).json({processed:0,reason:"daily_limit_reached",daily_limit:settings.daily_limit});
+    const settings=await readSettings();
     const base=process.env.APP_BASE_URL;if(!base)throw new Error("APP_BASE_URL is not configured.");
     const listed=await list({prefix:"publish-queue/",limit:100}),all=[];for(const blob of(listed.blobs||[])){const job=await readJob(blob.pathname).catch(()=>null);if(job&&job.status==="queued")all.push({pathname:blob.pathname,job});}
+    // Always plan future queue slots, even when today's publishing quota is already full.
     const scheduled=await autoSchedule(base,all,settings.daily_limit);
+    const remaining=Math.max(0,Number(settings.daily_limit||2)-Number(settings.published_today||0));
+    if(remaining<=0)return res.status(200).json({processed:0,reason:"daily_limit_reached",scheduled:scheduled.length,scheduled_jobs:scheduled,daily_limit:settings.daily_limit,published_today:settings.published_today,daily_remaining:0});
     const now=Date.now(),candidates=all.filter(x=>x.job.scheduled_at&&new Date(x.job.scheduled_at).getTime()<=now);
     const mode=settings.selection_mode==="ai_best"?"ai_best":"queue_order",selected=await selectCandidates(base,candidates,mode,remaining),results=[];
     for(const item of selected){const job=item.job;try{await writeJob(item.pathname,{...job,status:"publishing",stage:"preparing",attempts:Number(job.attempts||0)+1});const mediaUrl=await signedMediaUrl(job.source_pathname);const payload={platform:job.platform,connection_id:job.connection_id,video_url:mediaUrl,caption:job.caption,title:job.title,page_id:job.page_id};const r=await fetch(base.replace(/\/$/,"")+"/api/publish",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await r.json();if(!r.ok)throw new Error(data.error||"Platform publish failed.");const finalStatus=data.published===true?"published":"submitted";await writeJob(item.pathname,{...job,status:finalStatus,stage:finalStatus,provider_response:data,published_at:finalStatus==="published"?new Date().toISOString():null});if(finalStatus==="published"||data.publish_id||data.video_id||data.media_id){settings.published_today=Number(settings.published_today||0)+1;await writeSettings(settings);}results.push({id:job.id,platform:job.platform,status:finalStatus,data});}catch(error){await writeJob(item.pathname,{...job,status:"failed",stage:"failed",error:error?.message||"Publish failed"});results.push({id:job.id,platform:job.platform,status:"failed",error:error?.message||"Publish failed"});}}
