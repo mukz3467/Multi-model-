@@ -16,7 +16,7 @@ export default async function handler(req,res){
         const status=await fetch(base.replace(/\/$/,"")+"/api/connection-status?connection_id="+encodeURIComponent(id),{headers:{Authorization:"Bearer "+process.env.CRON_SECRET}});
         if(!status.ok)continue;
         const meta=await status.json();
-        if(!["youtube","tiktok"].includes(meta.provider))continue;
+        if(!["youtube","tiktok","meta"].includes(meta.provider))continue;
         const r=await fetch(base.replace(/\/$/,"")+"/api/sync-performance?connection_id="+encodeURIComponent(id),{method:"POST",headers:{Authorization:"Bearer "+process.env.CRON_SECRET,"Content-Type":"application/json"}});
         const data=await r.json();results.push({connection_id:id,provider:meta.provider,ok:r.ok,data});
       }catch(error){results.push({connection_id:id,ok:false,error:error?.message||"sync failed"});}
