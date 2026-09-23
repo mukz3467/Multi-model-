@@ -14,12 +14,17 @@ async function call(path, body) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-  const { content = {}, account = {}, posts = [], candidate_windows = [] } = req.body || {};
-  if (!candidate_windows.length) {
-    return res.status(400).json({ error: "candidate_windows is required." });
-  }
+  const { content = {}, account = {}, posts = [], candidate_windows = [], daily_limit, selection_mode } = req.body || {};
+  if (!candidate_windows.length) return res.status(400).json({ error: "candidate_windows is required." });
 
   try {
+    if (daily_limit != null || selection_mode != null) {
+      await call("/api/publishing-settings", {
+        daily_limit: daily_limit == null ? 2 : daily_limit,
+        selection_mode: selection_mode || "ai_best"
+      });
+    }
+
     const insights = await call("/api/account-insights", { account, posts });
     const decision = await call("/api/schedule-decision", {
       content,
@@ -31,19 +36,38 @@ export default async function handler(req, res) {
       }
     });
 
+    let queued = null;
+    // When the caller supplies a completed media object's pathname and an OAuth
+    // connection, autopilot can hand the item to the durable cron queue.
+    if (content.source_pathname && account.connection_id && content.platform) {
+      const scheduledAt = decision.decision?.scheduled_at ||
+        (decision.decision?.minutes_from_now != null
+          ? new Date(Date.now() + Number(decision.decision.minutes_from_now) * 60000).toISOString()
+          : new Date().toISOString());
+
+      queued = await call("/api/auto-publish", {
+        source_pathname: content.source_pathname,
+        platform: content.platform,
+        connection_id: account.connection_id,
+        page_id: account.page_id || null,
+        title: content.title || "",
+        caption: content.caption || content.description || "",
+        scheduled_at: scheduledAt,
+        priority_score: Number(decision.decision?.score || 0)
+      });
+    }
+
     return res.json({
       mode: "autopilot",
       insights,
       schedule_decision: decision,
+      queued,
       next: {
-        action: "authenticated_platform_publish",
-        requires_oauth: true
+        action: queued ? "background_queue" : "authenticated_platform_publish",
+        requires_oauth: !queued
       }
     });
   } catch (error) {
-    return res.status(500).json({
-      error: "Autopilot orchestration failed.",
-      details: error.message
-    });
+    return res.status(500).json({ error: "Autopilot orchestration failed.", details: error.message });
   }
 }
