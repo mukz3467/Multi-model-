@@ -16,6 +16,6 @@ export default async function handler(req,res){
   const data=await init.json();if(!init.ok||data.error?.code!=="ok")return res.status(502).json({error:"TikTok publish initialization failed.",details:data});
   const uploadUrl=data.data?.upload_url,publishId=data.data?.publish_id;if(!uploadUrl)return res.status(502).json({error:"TikTok did not return an upload URL."});
   for(let i=0;i<total;i++){const start=i*chunk,end=Math.min(body.length,start+chunk)-1,part=body.subarray(start,end+1);const u=await fetch(uploadUrl,{method:"PUT",headers:{"Content-Type":"video/mp4","Content-Length":String(part.length),"Content-Range":"bytes "+start+"-"+end+"/"+body.length},body:part});if(!u.ok)return res.status(502).json({error:"TikTok media upload failed.",publish_id:publishId,chunk:i+1,details:await u.text()});}
-  return res.json({published:true,provider:"tiktok",publish_id:publishId,privacy_level:privacy});
+  return res.status(202).json({published:false,submitted:true,provider:"tiktok",publish_id:publishId,privacy_level:privacy,message:"TikTok accepted the upload; processing status must be checked with publish-tiktok-status."});
  }catch(error){return res.status(502).json({error:error.message});}
 }
