@@ -57,5 +57,29 @@ export default async function handler(req,res){
     });
     return res.redirect(302,"/?"+qs.toString());
   }
-  return res.json({connected:true,provider:verified.provider,authorization_code_received:Boolean(code),next:"Provider-specific Meta token exchange and encrypted token storage remain required."});
+  if(verified.provider==="facebook"||verified.provider==="instagram"){
+    const tokenRes=await fetch(p.token,{
+      method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},
+      body:new URLSearchParams({
+        client_id:clientId,client_secret:clientSecret,redirect_uri:getRedirectUri(verified.provider),
+        code:String(code||"")
+      })
+    });
+    const token=await tokenRes.json();
+    if(!tokenRes.ok||!token.access_token) return res.status(400).json({error:"Meta token exchange failed.",details:token});
+    const meRes=await fetch("https://graph.facebook.com/v23.0/me?fields=id,name",{headers:{Authorization:"Bearer "+token.access_token}});
+    const me=await meRes.json();
+    if(!meRes.ok||!me.id) return res.status(400).json({error:"Meta account lookup failed.",details:me});
+    const pagesRes=await fetch("https://graph.facebook.com/v23.0/me/accounts?fields=id,name,access_token,instagram_business_account",{headers:{Authorization:"Bearer "+token.access_token}});
+    const pages=await pagesRes.json();
+    if(!pagesRes.ok) return res.status(400).json({error:"Facebook Pages lookup failed.",details:pages});
+    const accounts=(pages.data||[]).map(x=>({id:x.id,name:x.name,page_access_token:x.access_token,instagram_business_account:x.instagram_business_account?.id||null}));
+    if(!accounts.length) return res.status(400).json({error:"No Facebook Page was available to this Meta account."});
+    const subject=String(me.id);
+    const bundleToken={...token,meta_user_id:subject,pages:accounts};
+    const saved=await saveTokenBundle({provider:"meta",subject,token:bundleToken});
+    const qs=new URLSearchParams({oauth:"connected",provider:verified.provider,connection_id:saved.connection_id});
+    return res.redirect(302,"/?"+qs.toString());
+  }
+  return res.status(400).json({error:"Unsupported OAuth provider."});
 }
