@@ -57,6 +57,19 @@ export default async function handler(req, res) {
     avg_retention: avg(data, "retention")
   })).sort((a, b) => (b.avg_views ?? 0) - (a.avg_views ?? 0));
 
+  const byFormat = [...groupBy(rows, "format")].map(([format, data]) => ({
+    format, posts: data.length, avg_views: avg(data, "views"),
+    avg_reach: avg(data, "reach"), avg_retention: avg(data, "retention"),
+    avg_engagement: avg(data.map(r => ({ engagement: r.likes + r.comments + r.shares + r.saves })), "engagement")
+  })).sort((a, b) => (b.avg_views ?? 0) - (a.avg_views ?? 0));
+
+  const durationRows = rows.map(r => ({ ...r, duration_bucket:
+    r.duration_seconds == null ? "unknown" : num(r.duration_seconds) <= 30 ? "0-30s" :
+    num(r.duration_seconds) <= 60 ? "31-60s" : num(r.duration_seconds) <= 180 ? "61-180s" : "180s+"
+  }));
+  const byDuration = [...groupBy(durationRows, "duration_bucket")].map(([duration_bucket, data]) => ({
+    duration_bucket, posts: data.length, avg_views: avg(data, "views"), avg_retention: avg(data, "retention")
+  })).sort((a, b) => (b.avg_views ?? 0) - (a.avg_views ?? 0));
   const recent = rows.slice(-10);
   const previous = rows.slice(-20, -10);
   const recentAvg = avg(recent, "views");
@@ -86,7 +99,9 @@ export default async function handler(req, res) {
     },
     patterns: {
       topics: byTopic.slice(0, 10),
-      posting_hours: byHour.slice(0, 24)
+      posting_hours: byHour.slice(0, 24),
+      formats: byFormat.slice(0, 10),
+      duration_buckets: byDuration.slice(0, 10)
     },
     audience_activity: account.audience_activity || null,
     limitations: [
