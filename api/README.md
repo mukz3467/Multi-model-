@@ -6,9 +6,12 @@
 
 ## Media intelligence
 - `/api/account-insights` — computes account/content patterns from supplied analytics.
+- `/api/performance-ingest` — normalizes performance metrics supplied by an authenticated connector.
 - `/api/schedule-decision` — chooses among candidate windows using supplied account evidence.
+- `/api/autopilot` — orchestrates account insights → schedule decision.
 
-## Publishing
+## Platform layer
+- `/api/platform-connectors` — connector registry and explicit OAuth-required status.
 - `/api/publish-job` — platform-neutral publishing job. It does not pretend to publish without an authenticated connector.
 
 ## Rendering
