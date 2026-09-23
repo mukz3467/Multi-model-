@@ -63,7 +63,15 @@ export default async function handler(req,res){
     let posts=[];
     if(bundle.provider==="youtube")posts=await youtube(bundle.token.access_token);
     else if(bundle.provider==="tiktok")posts=await tiktok(bundle.token.access_token);
-    else return res.status(400).json({error:"Automatic analytics sync is not implemented for this provider yet."});
+    else if(bundle.provider==="meta"){
+      const pages=bundle.token?.pages||[];
+      const fb=await facebook(bundle.token.access_token,pages);
+      const ig=await instagram(bundle.token.access_token,pages);
+      const results=[];
+      if(fb.length)results.push(await ingest(base,"facebook",bundle.subject,fb,null));
+      if(ig.length)results.push(await ingest(base,"instagram",bundle.subject,ig,null));
+      return res.status(200).json({ok:true,provider:"meta",account_id:bundle.subject,fetched_posts:{facebook:fb.length,instagram:ig.length},ingest:results});
+    } else return res.status(400).json({error:"Automatic analytics sync is not implemented for this provider yet."});
     const result=await ingest(base,bundle.provider,bundle.subject,posts,null);
     return res.status(200).json({ok:true,provider:bundle.provider,account_id:bundle.subject,fetched_posts:posts.length,ingest:result});
   }catch(error){return res.status(502).json({ok:false,error:error?.message||"Analytics sync failed."});}
