@@ -188,9 +188,9 @@ async function refreshPublishingView(){
  const list=document.querySelector("#calendarList");
  document.querySelector("#calSlots").textContent=document.querySelector("#dailyRemaining").textContent||"—";
  document.querySelector("#calMode").textContent=document.querySelector("#selectionMode").value==="ai_best"?"AI":"Queue";
- const ids=JSON.parse(localStorage.getItem("multiModelJobs")||"[]");
- const rows=[];
- for(const id of ids.slice(0,20)){try{const r=await fetch("/api/jobs?id="+encodeURIComponent(id));if(r.ok)rows.push(await r.json())}catch{}}
+ const ids=JSON.parse(localStorage.getItem("multiModelJobs")||"[]"), rows=[], seen=new Set();
+ for(const id of ids.slice(0,30)){try{const r=await fetch("/api/jobs?id="+encodeURIComponent(id));if(r.ok){const j=await r.json();rows.push(j);seen.add(String(j.job_id))}}catch{}}
+ try{const r=await fetch("/api/jobs?list=1&limit=50");if(r.ok){const d=await r.json();for(const j of(d.jobs||[])){if(!seen.has(String(j.job_id))){rows.push(j);seen.add(String(j.job_id))}}}}catch{}
  const scheduled=rows.filter(j=>j.scheduled_at||j.status==="scheduled"||j.status==="queued");
  rows.sort((a,b)=>new Date(a.scheduled_at||"9999-12-31")-new Date(b.scheduled_at||"9999-12-31"));
  document.querySelector("#calNext").textContent=scheduled[0]?.scheduled_at?new Date(scheduled[0].scheduled_at).toLocaleString():"—";
