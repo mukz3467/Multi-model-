@@ -8,6 +8,16 @@ function normalize(p){
     watch_time_seconds:p.watch_time_seconds==null?null:num(p.watch_time_seconds),retention:p.retention==null?null:num(p.retention)};
 }
 function validKey(v){return String(v).replace(/[^a-z0-9_-]/gi,"_").slice(0,120);}
+function mergePost(previous,incoming){
+  const merged={...previous};
+  for(const [key,value] of Object.entries(incoming)){
+    if(value!==null&&value!==undefined&&value!=="")merged[key]=value;
+  }
+  const interactions=Number(merged.likes||0)+Number(merged.comments||0)+Number(merged.shares||0)+Number(merged.saves||0);
+  merged.engagement_rate=Number(merged.reach||merged.views)>0?Number((interactions/Number(merged.reach||merged.views)).toFixed(6)):null;
+  merged.performance_updated_at=new Date().toISOString();
+  return merged;
+}
 async function persist(platform,account_id,posts,audience_activity){
   const key="learning/"+validKey(platform)+"/"+validKey(account_id)+".json";
   let current={platform,account_id,posts:[],audience_activity:null,updated_at:null};
@@ -17,7 +27,10 @@ async function persist(platform,account_id,posts,audience_activity){
     if(d?.statusCode===200)current=await new Response(d.stream).json();
   }catch{}
   const byId=new Map((current.posts||[]).map(p=>[String(p.id),p]));
-  for(const p of posts){const id=p.id!=null?String(p.id):crypto.randomUUID();byId.set(id,{...byId.get(id),...p,id});}
+  for(const p of posts){
+    const id=p.id!=null?String(p.id):crypto.randomUUID();
+    byId.set(id,mergePost(byId.get(id)||{id}, {...p,id}));
+  }
   const merged=[...byId.values()].sort((a,b)=>new Date(a.published_at||0)-new Date(b.published_at||0)).slice(-500);
   const learning={platform,account_id,posts:merged,audience_activity:audience_activity??current.audience_activity??null,updated_at:new Date().toISOString()};
   await put(key,JSON.stringify(learning),{access:"private",contentType:"application/json",allowOverwrite:true});
@@ -31,8 +44,6 @@ export default async function handler(req,res){
   const normalized=posts.map(normalize);
   try{
     const learning=await persist(platform,account_id,normalized,audience_activity);
-    return res.status(202).json({accepted:true,persisted:true,platform,account_id,received_posts:normalized.length,learning_posts:learning.posts.length,received_audience_activity:Boolean(audience_activity)});
-  }catch(error){
-    return res.status(500).json({accepted:false,persisted:false,error:error?.message||"Learning persistence failed."});
-  }
+    return res.status(202).json({accepted:true,persisted:true,platform,account_id,received_posts:normalized.length,learning_posts:learning.posts.length,received_audience_activity:Boolean(audience_activity),feedback_loop:{updated:true,uses_next_cycle:true}});
+  }catch(error){return res.status(500).json({accepted:false,persisted:false,error:error?.message||"Learning persistence failed."});}
 }
