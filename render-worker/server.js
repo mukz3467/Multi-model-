@@ -34,6 +34,13 @@ function ffText(value) {
     .replace(/'/g, "\\'");
 }
 
+function buildSceneFilters(scene = {}) {
+  const keyColor = scene.key_color || "0x00ff00";
+  const similarity = Math.min(Math.max(Number(scene.similarity ?? 0.12), 0.01), 1);
+  const blend = Math.min(Math.max(Number(scene.blend ?? 0.08), 0), 1);
+  return `chromakey=color=${keyColor}:similarity=${similarity}:blend=${blend}`;
+}
+
 function buildFilters(plan = {}) {
   const filters = [];
   const cuts = (Array.isArray(plan.cuts) ? plan.cuts : [])
@@ -77,18 +84,30 @@ app.get("/health", (_req, res) => {
 app.post("/render", async (req, res) => {
   if (!auth(req, res)) return;
 
-  const { videoBase64, plan = {}, output = {} } = req.body || {};
+  const { videoBase64, plan = {}, output = {}, backgroundBase64 = "", scene = {} } = req.body || {};
   if (!videoBase64) return res.status(400).json({ error: "videoBase64 is required." });
 
   const id = crypto.randomUUID();
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), `mm-render-${id}-`));
   const input = path.join(dir, "input.mp4");
   const result = path.join(dir, "output.mp4");
+  const background = backgroundBase64 ? path.join(dir, "background.png") : null;
 
   try {
     await fs.writeFile(input, Buffer.from(videoBase64, "base64"));
-    const filters = buildFilters(plan);
-    const args = [
+    if (background) await fs.writeFile(background, Buffer.from(backgroundBase64, "base64"));
+    let filters = buildFilters(plan);
+    const sceneFilter = scene.enabled && background ? buildSceneFilters(scene) : null;
+    if (sceneFilter) filters = `${sceneFilter},${filters}`;
+    const args = background ? [
+      "-y", "-i", background, "-i", input,
+      "-filter_complex", `[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920[bg];[1:v]${filters}[fg];[bg][fg]overlay=shortest=1:format=auto[v]`,
+      "-map", "[v]", "-map", "1:a?",
+      "-c:v", "libx264",
+      "-preset", process.env.FFMPEG_PRESET || "veryfast",
+      "-crf", String(output.crf ?? 20),
+      "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", result
+    ] : [
       "-y", "-i", input,
       "-vf", filters,
       "-c:v", "libx264",
