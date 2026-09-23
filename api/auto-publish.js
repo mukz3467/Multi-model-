@@ -13,21 +13,34 @@ async function getLearning(base,job){
   const u=new URL(base.replace(/\/$/,"")+"/api/learning-memory");u.searchParams.set("platform",job.platform);u.searchParams.set("account_id",job.account_id);
   const r=await fetch(u);if(!r.ok)return null;const d=await r.json();return d.learning||null;
 }
-async function selectCandidates(base,candidates,mode,remaining,jobHint){
-  if(mode!=="ai_best")return candidates.sort((a,b)=>new Date(a.job.created_at)-new Date(b.job.created_at)).slice(0,remaining);
-  const learning=await getLearning(base,jobHint);
-  if(!learning?.posts?.length)return candidates.sort((a,b)=>Number(b.job.priority_score||0)-Number(a.job.priority_score||0)||new Date(a.job.created_at)-new Date(b.job.created_at)).slice(0,remaining);
-  const patterns={topics:[],formats:[],duration_buckets:[]};
-  const posts=learning.posts;
+function patternsFromPosts(posts){
   const group=(key,bucketFn)=>{const m=new Map();for(const p of posts){const k=bucketFn?bucketFn(p):p[key]??"unknown";if(!m.has(k))m.set(k,[]);m.get(k).push(p);}return [...m].map(([k,rows])=>({[key]:k,posts:rows.length,avg_views:rows.reduce((s,x)=>s+Number(x.views||0),0)/rows.length,avg_retention:rows.reduce((s,x)=>s+Number(x.retention||0),0)/rows.length}));};
-  patterns.topics=group("topic");patterns.formats=group("format");patterns.duration_buckets=group("duration_bucket",p=>p.duration_seconds==null?"unknown":Number(p.duration_seconds)<=30?"0-30s":Number(p.duration_seconds)<=60?"31-60s":Number(p.duration_seconds)<=180?"61-180s":"180s+");
-  const r=await fetch(base.replace(/\/$/,"")+"/api/content-selection",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({candidates:candidates.map(x=>x.job),patterns})});
-  if(!r.ok)return candidates.sort((a,b)=>Number(b.job.priority_score||0)-Number(a.job.priority_score||0)||new Date(a.job.created_at)-new Date(b.job.created_at)).slice(0,remaining);
-  const data=await r.json(),ranked=Array.isArray(data.ranked)?data.ranked:[];
-  const byId=new Map(candidates.map(x=>[String(x.job.id),x]));
-  return ranked.map(x=>byId.get(String(x.id))).filter(Boolean).slice(0,remaining);
+  return {
+    topics:group("topic"),formats:group("format"),
+    duration_buckets:group("duration_bucket",p=>p.duration_seconds==null?"unknown":Number(p.duration_seconds)<=30?"0-30s":Number(p.duration_seconds)<=60?"31-60s":Number(p.duration_seconds)<=180?"61-180s":"180s+")
+  };
 }
-
+async function selectCandidates(base,candidates,mode,remaining){
+  const fifo=()=>candidates.sort((a,b)=>Number(b.job.priority_score||0)-Number(a.job.priority_score||0)||new Date(a.job.created_at)-new Date(b.job.created_at)).slice(0,remaining);
+  if(mode!=="ai_best")return fifo();
+  const groups=new Map();
+  for(const item of candidates){
+    const j=item.job;const key=[j.platform,j.account_id||"unknown",j.connection_id].join("|");
+    if(!groups.has(key))groups.set(key,[]);groups.get(key).push(item);
+  }
+  const ranked=[];
+  for(const group of groups.values()){
+    const hint=group[0].job;
+    const learning=await getLearning(base,hint);
+    if(!learning?.posts?.length){ranked.push(...group);continue;}
+    const r=await fetch(base.replace(/\/$/,"")+"/api/content-selection",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({candidates:group.map(x=>x.job),patterns:patternsFromPosts(learning.posts)})});
+    if(!r.ok){ranked.push(...group);continue;}
+    const data=await r.json(),byId=new Map(group.map(x=>[String(x.job.id),x]));
+    for(const x of(Array.isArray(data.ranked)?data.ranked:[])){const item=byId.get(String(x.id));if(item)ranked.push(item);}
+    for(const item of group)if(!ranked.includes(item))ranked.push(item);
+  }
+  return ranked.slice(0,remaining);
+}
 export default async function handler(req,res){
   try{
     if(req.method==="POST"){
@@ -46,8 +59,7 @@ export default async function handler(req,res){
     const now=Date.now(),listed=await list({prefix:"publish-queue/",limit:100}),candidates=[];
     for(const blob of(listed.blobs||[])){const job=await readJob(blob.pathname).catch(()=>null);if(!job||job.status!=="queued")continue;const due=job.scheduled_at?new Date(job.scheduled_at).getTime()<=now:true;if(due)candidates.push({pathname:blob.pathname,job});}
     const mode=settings.selection_mode==="ai_best"?"ai_best":"queue_order";
-    const hint=candidates[0]?.job||{};
-    const selected=await selectCandidates(base,candidates,mode,remaining,hint);
+    const selected=await selectCandidates(base,candidates,mode,remaining);
     const results=[];
     for(const item of selected){
       const job=item.job;
