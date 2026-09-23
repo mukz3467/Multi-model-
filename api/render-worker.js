@@ -58,7 +58,7 @@ async function downloadFile(url, file) {
   await fs.writeFile(file, Buffer.from(await r.arrayBuffer()));
 }
 
-function buildVideoGraph(plan = {}, brollInputs = []) {
+function buildVideoGraph(plan = {}, brollInputs = [], sceneInputIndex = null) {
   const captions = Array.isArray(plan.captions) ? plan.captions.slice(0, 80) : [];
   const overlays = Array.isArray(plan.overlays) ? plan.overlays.slice(0, 50) : [];
   const cuts = normalizeCuts(plan);
@@ -93,7 +93,40 @@ function buildVideoGraph(plan = {}, brollInputs = []) {
     audioSource = "[acutjoined]";
   }
 
-  parts.push(`${source}scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2[vbase]`);
+  const scene = plan.scene_compositing || {};
+  const hasBackground = Number.isInteger(sceneInputIndex) && Boolean(scene.background_required || scene.background_url);
+
+  if (hasBackground) {
+    const keyColor = String(scene.key_color || "0x00ff00");
+    const similarity = clamp(scene.similarity ?? 0.12, 0.01, 0.5, 0.12);
+    const blend = clamp(scene.blend ?? 0.08, 0, 1, 0.08);
+    const scale = clamp(scene.scale ?? 1, 0.65, 1.35, 1);
+    const x = clamp(scene.position?.x ?? 0.5, 0, 1, 0.5);
+    const y = clamp(scene.position?.y ?? 0.62, 0, 1, 0.62);
+    const brightness = clamp(scene.brightness ?? 0, -0.25, 0.25, 0);
+    const contrast = clamp(scene.contrast ?? 1, 0.7, 1.3, 1);
+    const saturation = clamp(scene.saturation ?? 1, 0.7, 1.3, 1);
+    const bgBlur = clamp(scene.background_blur ?? 0, 0, 20, 0);
+
+    parts.push(
+      `[${sceneInputIndex}:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1${bgBlur > 0 ? `,gblur=sigma=${bgBlur}` : ""}[scene_bg]`
+    );
+    parts.push(
+      `${source}scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,chromakey=${keyColor}:${similarity}:${blend},eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}[scene_fg]`
+    );
+
+    const subjectWidth = Math.round(1080 * scale);
+    const subjectX = Math.round((1080 - subjectWidth) * x);
+    const subjectY = Math.round((1920 - Math.round(1920 * scale)) * y);
+    parts.push(
+      `[scene_fg]scale=${subjectWidth}:-2:force_original_aspect_ratio=decrease[scene_subject]`
+    );
+    parts.push(
+      `[scene_bg][scene_subject]overlay=x=${subjectX}:y=${subjectY}:eof_action=repeat[vbase]`
+    );
+  } else {
+    parts.push(`${source}scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2[vbase]`);
+  }
 
   let current = "[vbase]";
   let index = 0;
@@ -211,7 +244,20 @@ async function handler(req, res) {
       inputArgs.push("-i", file);
     }
 
-    const { filterComplex, mapVideo, mapAudio } = buildVideoGraph(b.plan || {}, brollInputs);
+    const scenePlan = b.plan?.scene_compositing || {};
+    let sceneInputIndex = null;
+    if (scenePlan.background_url && scenePlan.background_required) {
+      const sceneFile = path.join(dir, "scene-background");
+      await downloadFile(scenePlan.background_url, sceneFile);
+      sceneInputIndex = brollInputs.length + 1;
+      inputArgs.push("-i", sceneFile);
+    }
+
+    const { filterComplex, mapVideo, mapAudio } = buildVideoGraph(
+      b.plan || {},
+      brollInputs,
+      sceneInputIndex
+    );
     const args = [
       ...inputArgs,
       "-filter_complex", filterComplex,
@@ -247,6 +293,7 @@ async function handler(req, res) {
         captions: Array.isArray(b.plan?.captions),
         overlays: Array.isArray(b.plan?.overlays),
         broll: broll.length,
+        green_screen: Boolean(sceneInputIndex),
         audio: Array.isArray(b.plan?.audio)
       },
       renderer: "vercel-ffmpeg"
