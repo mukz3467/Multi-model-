@@ -1,11 +1,18 @@
 import { loadTokenBundle } from "./token-vault.js";
 export default async function handler(req,res){
  if(req.method!=="POST") return res.status(405).json({error:"POST only"});
- const {connection_id,video_base64,title="",privacy_level="SELF_ONLY",is_aigc=false}=req.body||{};
- if(!connection_id||!video_base64) return res.status(400).json({error:"connection_id and video_base64 are required."});
+ const {connection_id,video_base64_input,title="",privacy_level="SELF_ONLY",is_aigc=false}=req.body||{};
+ if(!connection_id||!video_base64_input) return res.status(400).json({error:"connection_id and video_base64_input are required."});
  try{
+  let video_base64=video_base64_input;
+  if(!video_base64_input_input && video_url){
+    const media=await fetch(video_url);
+    if(!media.ok) return res.status(400).json({error:"Could not download source video URL."});
+    const bytes=Buffer.from(await media.arrayBuffer());
+    video_base64_input_input=bytes.toString("base64");
+  }
   const bundle=await loadTokenBundle(connection_id); if(!bundle||bundle.provider!=="tiktok") return res.status(404).json({error:"TikTok connection not found."});
-  const token=bundle.token.access_token, body=Buffer.from(video_base64,"base64");
+  const token=bundle.token.access_token, body=Buffer.from(video_base64_input,"base64");
   const creator=await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/",{method:"POST",headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"}});
   const creatorData=await creator.json(); if(!creator.ok) return res.status(502).json({error:"TikTok creator info failed.",details:creatorData});
   const allowed=creatorData.data?.privacy_level_options||[], privacy=allowed.includes(privacy_level)?privacy_level:(allowed[0]||"SELF_ONLY");
