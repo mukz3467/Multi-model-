@@ -46,6 +46,18 @@ export async function loadTokenBundle(id){
   return JSON.parse(plaintext.toString("utf8"));
 }
 
+export async function loadTokenBundle(id){
+  const key=keyFromEnv();
+  const result=await get(PREFIX+id+".json",{access:"private",useCache:false});
+  if(!result) return null;
+  const text=await new Response(result.stream).text();
+  const box=JSON.parse(text);
+  const decipher=crypto.createDecipheriv("aes-256-gcm",key,Buffer.from(box.iv,"base64url"));
+  decipher.setAuthTag(Buffer.from(box.tag,"base64url"));
+  const plaintext=Buffer.concat([decipher.update(Buffer.from(box.data,"base64url")),decipher.final()]);
+  return JSON.parse(plaintext.toString("utf8"));
+}
+
 export function publicConnectionId(provider,subject){
   return connectionId(provider,subject);
 }
