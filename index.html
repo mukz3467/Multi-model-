@@ -20,7 +20,7 @@ textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;mar
 .status{margin-top:10px;font-size:13px;color:#91a4c2}.pill{display:inline-block;padding:5px 9px;border-radius:99px;background:#13223a;color:#8db8ff;font-size:12px;margin:3px}
 .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;text-align:left}.metric{padding:12px;background:#09111f;border-radius:12px}.metric b{display:block;font-size:20px}
 .batchPanel{margin-top:14px;padding:14px;background:#070d18;border:1px solid #1d304d;border-radius:14px}
-.job{display:grid;grid-template-columns:1fr 110px 90px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #18263b}
+.job{display:grid;grid-template-columns:1fr 110px 90px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #18263b}.dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}.stage{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.dot{width:9px;height:9px;border-radius:50%;background:#334155;display:inline-block}.dot.active{background:#38bdf8;box-shadow:0 0 12px #38bdf8}.dot.ok{background:#22c55e;box-shadow:0 0 12px #22c55e}.dot.bad{background:#ef4444}
 .progress{height:7px;background:#162235;border-radius:99px;overflow:hidden}.progress i{display:block;height:100%;background:#2563eb;width:0%;transition:.2s}
 </style>
 </head>
@@ -31,6 +31,15 @@ textarea{width:100%;margin-top:12px}.preview{max-width:100%;max-height:260px;mar
 
 <section class="grid" id="modules"></section>
 
+<section class="card panel"><h3>AI Control Center</h3><p class="muted">Live view of the autonomous pipeline, queue and publishing state.</p>
+<div class="dash">
+<div class="metric"><b id="dashQueued">0</b><span class="muted">queued jobs</span></div>
+<div class="metric"><b id="dashProcessing">0</b><span class="muted">processing</span></div>
+<div class="metric"><b id="dashPublished">0</b><span class="muted">published</span></div>
+<div class="metric"><b id="dashFailed">0</b><span class="muted">failed</span></div>
+</div>
+<div class="batchPanel"><div class="stage"><span class="dot ok"></span>Analyze <span class="dot ok"></span>Edit <span class="dot ok"></span>SEO <span class="dot active"></span>Schedule <span class="dot active"></span>Publish <span class="dot active"></span>Learn</div><div id="autopilotState" class="status">System ready — waiting for media.</div></div>
+</section>
 <section class="card panel"><h3>Content Workspace</h3><p class="muted">Upload raw media and let the model build the intelligence layer.</p>
 <div class="drop"><input id="file" type="file" multiple accept="image/*,audio/*,video/*,.txt,.pdf">
 <div id="batchPanel" class="batchPanel">
@@ -109,10 +118,11 @@ async function uploadOne(file,i,results){
  }catch(e){badge.textContent="failed";pct.textContent=String(e.message||e).slice(0,32);}
 }
 async function refreshBatch(){
- const ids=JSON.parse(localStorage.getItem("multiModelJobs")||"[]");if(!ids.length)return;
- let ready=0;
- for(const id of ids){try{const r=await fetch("/api/jobs?id="+encodeURIComponent(id));if(r.ok){ready++;const j=await r.json();const row=[...document.querySelectorAll(".job")].find(x=>x.id.includes(j.job_id));if(row){row.querySelector(".pill").textContent=j.status;row.querySelector("[id^=pct-]").textContent=j.progress+"%";}}}catch{}}
- document.querySelector("#status").textContent=ready+" persistent video job(s) found.";
+ const ids=JSON.parse(localStorage.getItem("multiModelJobs")||"[]");if(!ids.length){updateDashboard([]);return}
+ let ready=0; const jobs=[];
+
+ for(const id of ids){try{const r=await fetch("/api/jobs?id="+encodeURIComponent(id));if(r.ok){ready++;const j=await r.json();jobs.push(j);const row=[...document.querySelectorAll(".job")].find(x=>x.id.includes(j.job_id));if(row){row.querySelector(".pill").textContent=j.status+" • "+(j.stage||"");row.querySelector("[id^=pct-]").textContent=(j.progress??0)+"%";}}}catch{}}
+ document.querySelector("#status").textContent=ready+" persistent video job(s) found.";updateDashboard(jobs);
 }
 function fileToBase64(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(",")[1]||"");r.onerror=reject;r.readAsDataURL(file)})}
 function moduleInstructions(enabled){const t=[];if(enabled.includes("text"))t.push("Handle the text request.");if(enabled.includes("image"))t.push("Analyze objects, visible text and visual context.");if(enabled.includes("audio"))t.push("Transcribe and analyze audio.");if(enabled.includes("video"))t.push("Analyze topic, hook, scenes, pacing and notable moments.");if(enabled.includes("analysis"))t.push("Return audience, strengths, weaknesses and improvements.");if(enabled.includes("seo"))t.push("Create separate YouTube, Instagram, TikTok and Facebook SEO packages.");if(enabled.includes("editing"))t.push("Create a professional edit plan with cuts, captions, B-roll, pacing, transitions, audio cues and 9:16 guidance.");return t.join("\n")}
@@ -137,6 +147,16 @@ async function loadAccountAnalytics(){const out=document.querySelector("#out"),s
 async function runAutopilotPipeline(){const file=document.querySelector("#file").files[0],out=document.querySelector("#out"),status=document.querySelector("#status");if(!file){out.textContent="Upload a raw video first.";return}if(!file.type.startsWith("video/")){out.textContent="Full autopilot currently requires a video.";return}status.textContent="1/4 Analyzing raw video...";try{const data=await fileToBase64(file);const prompt=document.querySelector("#prompt").value.trim()||"Analyze this raw video for retention, hook, scenes, audience and platform-specific optimization.";let r=await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt,mimeType:file.type,data,editing:true,seo:true,analysis:true})});let j=await r.json();if(!r.ok)throw Error(j.error||"Analysis failed.");out.textContent=j.text||"Analysis complete.";status.textContent="2/4 Building edit decision list...";r=await fetch("/api/edit-plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mimeType:file.type,data,instruction:prompt})});j=await r.json();if(!r.ok)throw Error(j.error||"Edit plan failed.");status.textContent="3/4 Finding real B-roll assets..."; latestPlan=await findBrollAssets(j.plan); document.querySelector("#renderBtn").disabled=false; out.textContent=JSON.stringify(latestPlan,null,2); status.textContent="4/4 Autopilot plan ready. Render Edited Video to create the final media.";document.querySelector("#renderBtn").scrollIntoView({behavior:"smooth",block:"center"});}catch(e){out.textContent="Autopilot error: "+e.message;status.textContent="Autopilot stopped safely."}}\nasync function savePublishingSettings(){const limit=Math.max(1,Math.min(100,Number(document.querySelector("#dailyLimit").value)||2));document.querySelector("#dailyLimit").value=limit;try{const r=await fetch("/api/publishing-settings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({daily_limit:limit,selection_mode:document.querySelector("#selectionMode").value})});const j=await r.json();if(!r.ok)throw Error(j.error||"Save failed.");document.querySelector("#limitStatus").textContent="Saved: "+j.daily_limit+" video(s)/day.";document.querySelector("#dailyRemaining").textContent=j.daily_remaining;}catch(e){document.querySelector("#limitStatus").textContent="Save failed: "+e.message}}
 async function loadPublishingSettings(){try{const r=await fetch("/api/publishing-settings");if(!r.ok)return;const j=await r.json();document.querySelector("#dailyLimit").value=j.daily_limit;document.querySelector("#selectionMode").value=j.selection_mode||"ai_best";document.querySelector("#dailyRemaining").textContent=j.daily_remaining;document.querySelector("#limitStatus").textContent="Loaded: "+j.daily_limit+" video(s)/day."}catch{}}
 async function runAutopilot(){const out=document.querySelector("#out"),status=document.querySelector("#status");const platform=document.querySelector("#platform").value,topic=document.querySelector("#topic").value.trim()||null;const dailyLimit=Math.max(1,Math.min(100,Number(document.querySelector("#dailyLimit").value)||2));const hours=document.querySelector("#hours").value.split(",").map(x=>Number(x.trim())).filter(Number.isFinite).map(hour=>({hour,minutes_from_now:120}));if(!hours.length){out.textContent="Enter candidate hours.";return}status.textContent="Analyzing account signals and schedule windows...";out.textContent="Autopilot running...";try{const r=await fetch("/api/autopilot",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:{platform,topic,format:"short_video"},account:{platform,connection_id:new URLSearchParams(location.search).get("connection_id")||null,daily_limit:dailyLimit,selection_mode:document.querySelector("#selectionMode").value},posts:syncedAnalytics?.videos||[],candidate_windows:hours,daily_limit:dailyLimit})});const j=await r.json();if(!r.ok)throw Error(j.error||"Autopilot failed.");out.textContent=JSON.stringify(j,null,2);status.textContent="Schedule analysis completed."}catch(e){out.textContent="Autopilot error: "+e.message;status.textContent="Autopilot failed."}}
+function updateDashboard(jobs){
+ const counts={queued:0,processing:0,published:0,failed:0};
+ for(const j of jobs){if(j.status==="published")counts.published++;else if(j.status==="failed")counts.failed++;else if(["processing","publishing","rendering"].includes(j.status))counts.processing++;else counts.queued++;}
+ document.querySelector("#dashQueued").textContent=counts.queued;
+ document.querySelector("#dashProcessing").textContent=counts.processing;
+ document.querySelector("#dashPublished").textContent=counts.published;
+ document.querySelector("#dashFailed").textContent=counts.failed;
+ const state=document.querySelector("#autopilotState");
+ state.textContent=jobs.length?("Live queue: "+jobs.length+" job(s) • "+counts.processing+" processing • "+counts.published+" published • "+counts.failed+" failed."):"System ready — waiting for media.";
+}
 render();
-checkConnectionFromUrl();\nloadPublishingSettings();
+checkConnectionFromUrl();\nloadPublishingSettings();\nsetInterval(()=>{refreshBatch().catch(()=>{})},15000);
 </script></body></html>
