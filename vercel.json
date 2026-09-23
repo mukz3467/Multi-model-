@@ -2,6 +2,7 @@
   "version": 2,
   "crons": [
     { "path": "/api/auto-publish", "schedule": "*/5 * * * *" },
-    { "path": "/api/process-media", "schedule": "*/10 * * * *" }
+    { "path": "/api/process-media", "schedule": "*/10 * * * *" },
+    { "path": "/api/sync-performance-all", "schedule": "*/30 * * * *" }
   ]
 }
