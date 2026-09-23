@@ -25,16 +25,30 @@ export default async function handler(req, res) {
       });
     }
 
-    const insights = await call("/api/account-insights", { account, posts });
+    let learning = { posts: [], audience_activity: null };
+    if (account.platform && account.account_id) {
+      try {
+        const response = await fetch(new URL("/api/learning-memory?platform=" + encodeURIComponent(account.platform) + "&account_id=" + encodeURIComponent(account.account_id), process.env.APP_BASE_URL));
+        if (response.ok) learning = (await response.json()).learning || learning;
+      } catch {}
+    }
+    const mergedPosts = [...(learning.posts || []), ...(Array.isArray(posts) ? posts : [])];
+    const mergedAccount = { ...account, audience_activity: account.audience_activity || learning.audience_activity || null };
+    const insights = await call("/api/account-insights", { account: mergedAccount, posts: mergedPosts });
     const decision = await call("/api/schedule-decision", {
-      content,
-      candidate_windows,
+      content, candidate_windows,
       context: {
         audience_activity: insights.audience_activity,
         historical_windows: insights.patterns.posting_hours,
-        topic_performance: insights.patterns.topics
+        topic_performance: insights.patterns.topics,
+        format_performance: insights.patterns.formats
       }
     });
+    if (account.platform && account.account_id && Array.isArray(posts) && posts.length) {
+      try {
+        await call("/api/learning-memory", { platform:account.platform, account_id:account.account_id, posts, audience_activity:mergedAccount.audience_activity });
+      } catch {}
+    }
 
     let queued = null;
     // When the caller supplies a completed media object's pathname and an OAuth
