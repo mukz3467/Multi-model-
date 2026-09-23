@@ -37,6 +37,13 @@ Required environment variables:
 - `TOKEN_ENCRYPTION_KEY` — 32-byte hex key
 - `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`
 - `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`
+- `META_APP_ID`, `META_APP_SECRET`
+- `GEMINI_API_KEY`
+- `CRON_SECRET`
+- `BLOB_READ_WRITE_TOKEN`
+- `RENDER_WORKER_TOKEN` (optional for protected rendering)
+- `RENDER_WORKER_URL` (optional external FFmpeg worker; otherwise Vercel fallback is used)
+- `FFMPEG_PRESET` and `RENDER_TIMEOUT_MS` (optional rendering tuning)
 
 Storage setup:
 1. Create a private Vercel Blob store and connect it to the project.
@@ -49,4 +56,4 @@ Google recommends server-side confidential OAuth flows with persistent refresh-t
 
 ## Current connector scope
 
-YouTube and TikTok now have token exchange + encrypted persistence + account identity lookup. Facebook/Instagram remain provider-specific token-exchange work and are not represented as fully connected until their token flow is implemented.
+YouTube and TikTok now have token exchange + encrypted persistence + account identity lookup. Facebook/Instagram now use the Meta OAuth callback, discover connected Pages and linked Instagram professional accounts, and store Meta credentials encrypted in private Blob storage. Re-authorize existing connections after scope changes.
