@@ -14,6 +14,35 @@ async function youtube(token){
   const vd=await v.json();if(!v.ok)throw new Error(vd.error?.message||"YouTube metrics failed.");
   return(vd.items||[]).map(x=>({id:x.id,published_at:x.snippet?.publishedAt||null,published_hour:x.snippet?.publishedAt?new Date(x.snippet.publishedAt).getUTCHours():null,topic:x.snippet?.categoryId||null,format:"video",duration_seconds:parseDuration(x.contentDetails?.duration),views:Number(x.statistics?.viewCount||0),likes:Number(x.statistics?.likeCount||0),comments:Number(x.statistics?.commentCount||0),shares:null,saves:null}));
 }
+
+async function facebook(token,pages){
+  const posts=[];
+  for(const page of pages||[]){
+    if(!page.id||!page.page_access_token)continue;
+    const fields="id,created_time,message,shares,comments.limit(0).summary(true),reactions.limit(0).summary(true),permalink_url";
+    const r=await fetch("https://graph.facebook.com/v23.0/"+encodeURIComponent(page.id)+"/posts?fields="+encodeURIComponent(fields)+"&limit=50",{headers:{Authorization:"Bearer "+page.page_access_token}});
+    const d=await r.json();if(!r.ok)continue;
+    for(const x of d.data||[]){
+      const reactions=Number(x.reactions?.summary?.total_count||0),comments=Number(x.comments?.summary?.total_count||0),shares=Number(x.shares?.count||0);
+      posts.push({id:x.id,published_at:x.created_time||null,published_hour:x.created_time?new Date(x.created_time).getUTCHours():null,topic:null,format:"post",duration_seconds:null,views:null,likes:reactions,comments,shares,saves:null,account_id:page.id,permalink:x.permalink_url||null});
+    }
+  }
+  return posts;
+}
+async function instagram(token,pages){
+  const posts=[];
+  for(const page of pages||[]){
+    const ig=page.instagram_business_account;
+    if(!ig||!page.page_access_token)continue;
+    const fields="id,caption,media_type,timestamp,like_count,comments_count,permalink";
+    const r=await fetch("https://graph.facebook.com/v23.0/"+encodeURIComponent(ig)+"/media?fields="+encodeURIComponent(fields)+"&limit=50",{headers:{Authorization:"Bearer "+page.page_access_token}});
+    const d=await r.json();if(!r.ok)continue;
+    for(const x of d.data||[]){
+      posts.push({id:x.id,published_at:x.timestamp||null,published_hour:x.timestamp?new Date(x.timestamp).getUTCHours():null,topic:null,format:String(x.media_type||"media").toLowerCase(),duration_seconds:null,views:null,likes:Number(x.like_count||0),comments:Number(x.comments_count||0),shares:null,saves:null,account_id:ig,permalink:x.permalink||null});
+    }
+  }
+  return posts;
+}
 function parseDuration(s){const m=String(s||"").match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);return m?Number(m[1]||0)*3600+Number(m[2]||0)*60+Number(m[3]||0):null;}
 async function tiktok(token){
   const fields="id,title,create_time,view_count,like_count,comment_count,share_count";
